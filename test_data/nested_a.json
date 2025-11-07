@@ -1,0 +1,11 @@
+{
+    "item": "apple",
+    "pricing": {
+        "amount": 5,
+        "currency": "USD"
+    },
+    "stock": {
+        "available": true,
+        "quantity": 100
+    }
+}

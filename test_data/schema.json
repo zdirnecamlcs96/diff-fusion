@@ -1,0 +1,34 @@
+{
+    "cif_schema": {
+        "product_name": {
+            "type": "string",
+            "required": true
+        },
+        "product_price": {
+            "type": "number",
+            "required": true
+        }
+    },
+    "transformations": {
+        "format_a": {
+            "product_name": {
+                "source_path": "name",
+                "type": "string"
+            },
+            "product_price": {
+                "source_path": "price",
+                "type": "number"
+            }
+        },
+        "format_b": {
+            "product_name": {
+                "source_path": "product_name",
+                "type": "string"
+            },
+            "product_price": {
+                "source_path": "cost",
+                "type": "number"
+            }
+        }
+    }
+}
