@@ -2,8 +2,9 @@
 
 use diff_fusion::{
     ConflictReport, compare_json, compare_json_string, transform_to_cif, transform_to_cif_string,
+    types::{CifFieldDefinition, CifSchema},
 };
-use serde_json::{Value, json};
+use serde_json::json;
 
 fn main() {
     println!("🚀 diff-fusion Library Examples\n");
@@ -16,6 +17,12 @@ fn main() {
 
     // Example 3: Real-world use case
     example_3_real_world();
+
+    // Example 4: Builder pattern for CIF field definitions
+    example_4_builder_pattern();
+
+    // Example 5: Trait-based schema (compile-time safety)
+    example_5_trait_schema();
 }
 
 fn example_1_value_api() {
@@ -142,6 +149,155 @@ fn example_3_real_world() {
                 );
             }
         }
-        Err(e) => println!("❌ Error: {}", e),
+        Err(e) => println!("❌ Error: {}\n", e),
     }
+}
+
+fn example_4_builder_pattern() {
+    println!("📝 Example 4: Builder Pattern for CIF Schema\n");
+
+    // Demonstrate the ergonomic builder pattern for CifFieldDefinition
+    let email_field = CifFieldDefinition::new("string")
+        .required()
+        .with_description("User's email address");
+
+    let age_field = CifFieldDefinition::new("number")
+        .optional()
+        .with_description("User's age")
+        .with_default(json!(0));
+
+    let active_field = CifFieldDefinition::new("boolean")
+        .required()
+        .with_description("Whether user account is active");
+
+    println!("✅ Email field definition:");
+    println!("   Type: {}", email_field.field_type);
+    println!("   Required: {}", email_field.required);
+    println!("   Description: {:?}", email_field.description);
+    println!();
+
+    println!("✅ Age field definition:");
+    println!("   Type: {}", age_field.field_type);
+    println!("   Required: {}", age_field.required);
+    println!("   Default: {:?}", age_field.default);
+    println!();
+
+    println!("✅ Active field definition:");
+    println!("   Type: {}", active_field.field_type);
+    println!("   Required: {}", active_field.required);
+    println!();
+
+    // Show validation
+    match email_field.validate() {
+        Ok(_) => println!("✅ Email field is valid"),
+        Err(e) => println!("❌ Validation error: {}", e),
+    }
+
+    // Show type parsing
+    if let Some(cif_type) = email_field.get_type() {
+        println!("📝 Parsed CIF type: {}", cif_type);
+        println!("   Is primitive? {}", cif_type.is_primitive());
+    }
+    println!();
+}
+
+fn example_5_trait_schema() {
+    println!("🎯 Example 5: Trait-based Schema (Compile-time Safety)\n");
+
+    // Define a Product schema using the CifSchema trait
+    struct Product;
+    impl CifSchema for Product {
+        fn schema_name() -> &'static str {
+            "product"
+        }
+
+        fn fields() -> Vec<(&'static str, CifFieldDefinition)> {
+            vec![
+                (
+                    "product_id",
+                    CifFieldDefinition::new("string")
+                        .required()
+                        .with_description("Unique product identifier"),
+                ),
+                (
+                    "name",
+                    CifFieldDefinition::new("string")
+                        .required()
+                        .with_description("Product name"),
+                ),
+                (
+                    "price",
+                    CifFieldDefinition::new("number")
+                        .required()
+                        .with_description("Product price in USD"),
+                ),
+                (
+                    "in_stock",
+                    CifFieldDefinition::new("boolean")
+                        .optional()
+                        .with_description("Stock availability")
+                        .with_default(json!(true)),
+                ),
+            ]
+        }
+    }
+
+    // Generate JSON schema from the trait
+    let schema = Product::to_json_schema();
+    println!("✅ Generated JSON Schema:");
+    println!("{}\n", serde_json::to_string_pretty(&schema).unwrap());
+
+    // Validate valid data
+    let valid_product = json!({
+        "product_id": "P123",
+        "name": "Laptop",
+        "price": 999.99,
+        "in_stock": true
+    });
+
+    match Product::validate(&valid_product) {
+        Ok(_) => println!("✅ Valid product data passed validation"),
+        Err(errors) => println!("❌ Validation errors: {:?}", errors),
+    }
+
+    // Validate invalid data (missing required field)
+    let invalid_product = json!({
+        "product_id": "P456",
+        "name": "Mouse"
+        // Missing required 'price' field
+    });
+
+    match Product::validate(&invalid_product) {
+        Ok(_) => println!("✅ Product validated"),
+        Err(errors) => {
+            println!("\n⚠️  Invalid product data (as expected):");
+            for error in errors {
+                println!("   - {}", error);
+            }
+        }
+    }
+
+    // Type mismatch validation
+    let wrong_type = json!({
+        "product_id": "P789",
+        "name": "Keyboard",
+        "price": "not a number"  // Wrong type!
+    });
+
+    match Product::validate(&wrong_type) {
+        Ok(_) => println!("✅ Product validated"),
+        Err(errors) => {
+            println!("\n⚠️  Type mismatch detected:");
+            for error in errors {
+                println!("   - {}", error);
+            }
+        }
+    }
+
+    println!("\n💡 Trait-based schemas provide:");
+    println!("   • Compile-time type safety");
+    println!("   • IDE autocomplete support");
+    println!("   • Automatic JSON schema generation");
+    println!("   • Runtime validation");
+    println!();
 }

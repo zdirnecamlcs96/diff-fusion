@@ -1,6 +1,29 @@
 # diff-fusion
 
-A JSON diff tool with **Common Intermediate Format (CIF)** support for comparing structurally different JSON files.
+**A Rust library and CLI tool for detecting conflicts between different JSON formats.**
+
+Think `git diff` for JSON data across multiple systems - transform to a common format (CIF), then compare and report differences. **You resolve conflicts manually**, just like Git.
+
+> **Name Explained:** "fusion" = fusing different formats into CIF for comparison, not merging/syncing data
+
+## What This Tool Does
+
+```
+System A JSON → CIF ← System B JSON
+                 ↓
+         Compare & Report
+                 ↓
+        "Field X differs"
+                 ↓
+         You Decide What To Do
+```
+
+**Like `git diff`:**
+
+- ✅ Shows what changed
+- ✅ Detects conflicts
+- ❌ Does NOT merge automatically
+- ❌ Does NOT push changes back
 
 ## The Problem
 
@@ -25,21 +48,79 @@ When integrating multiple systems, direct point-to-point transformations don't s
 
 ## Features
 
-- Compare JSON files with different structures
-- Define transformers using a schema file
-- Extract nested values using dot notation (`pricing.amount`)
-- Automatic type conversion (string ↔ number ↔ boolean)
-- Colored diff output
+- 🎯 **Simple Facade API** - Easy-to-use interface, no need to understand internals
+- 🔄 **Transform** JSON from different formats to a common structure (CIF)
+- ⚖️  **Compare** JSON data and detect conflicts automatically
+- 🔍 **Report Differences** - Like `git diff`, shows what changed with detailed conflict info
+- 👤 **Manual Resolution** - You decide how to handle conflicts (like Lodash, but with context)
+- 📋 **Schema-driven** - Define transformations once, use everywhere
+- 🔍 **Nested paths** - Extract values using dot notation (`user.profile.name`)
+- 🔢 **Type conversion** - Automatic string ↔ number ↔ boolean conversion
+- ✅ **Validation** - Built-in CIF schema validation
+- 🎨 **Colored CLI** - Beautiful terminal output
 
-## Installation
+## Quick Start (Library)
 
-```bash
-git clone https://github.com/zdirnecamlcs96/diff-fusion.git
-cd diff-fusion
-cargo build --release
+### Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+diff-fusion = { git = "https://github.com/zdirnecamlcs96/diff-fusion.git" }
+serde_json = "1.0"
 ```
 
-## Usage
+### Basic Usage
+
+```rust
+use diff_fusion::DiffFusion;
+use serde_json::json;
+
+fn main() {
+    // 1. Define your schema once
+    let schema = json!({
+        "cif_schema": {
+            "product_id": {"type": "string", "required": true},
+            "product_name": {"type": "string", "required": true},
+            "price": {"type": "number", "required": true}
+        },
+        "transformations": {
+            "salesforce": {
+                "product_id": {"source_path": "Id", "type": "string"},
+                "product_name": {"source_path": "Name", "type": "string"},
+                "price": {"source_path": "Price__c", "type": "number"}
+            },
+            "shopify": {
+                "product_id": {"source_path": "id", "type": "string"},
+                "product_name": {"source_path": "title", "type": "string"},
+                "price": {"source_path": "variants.0.price", "type": "number"}
+            }
+        }
+    });
+
+    // 2. Create DiffFusion instance
+    let diff_fusion = DiffFusion::new(schema);
+
+    // 3. Transform data from different sources
+    let salesforce_data = json!({"Id": "SF-001", "Name": "Widget", "Price__c": 29.99});
+    let shopify_data = json!({"id": "SH-001", "title": "Widget", "variants": [{"price": 34.99}]});
+
+    // 4. Transform to CIF and compare
+    let report = diff_fusion
+        .transform_and_compare(&salesforce_data, "salesforce", &shopify_data, "shopify")
+        .unwrap();
+
+    println!("Conflicts detected: {}", report.total_conflicts);
+    for conflict in report.conflicts {
+        println!("  {} changed: {} → {}", conflict.path, conflict.old_value, conflict.new_value);
+    }
+}
+```
+
+That's it! No need to understand transformers, comparators, or internal functions.
+
+## CLI Usage
 
 ### 1. Create your JSON files
 
@@ -105,8 +186,8 @@ cargo build --release
 ### 3. Run the comparison
 
 ```bash
-cargo run -- diff a.json b.json \
-  --schema schema.json \
+cargo run -- diff tests/fixtures/a.json tests/fixtures/b.json \
+  --schema tests/fixtures/schema.json \
   --format-a format_a \
   --format-b format_b
 ```
@@ -216,14 +297,30 @@ OPTIONS:
 
 ## Examples
 
-See the `examples/` directory for more:
+### CLI Examples
+
+Sample data files are in `tests/fixtures/`:
 
 ```bash
+# Basic comparison with different formats
+cargo run -- diff tests/fixtures/a.json tests/fixtures/b.json \
+  --schema tests/fixtures/schema.json \
+  --format-a format_a \
+  --format-b format_b
+
 # Nested vs flat structures
-cargo run -- diff examples/nested_a.json examples/nested_b.json \
-  --schema examples/nested_schema.json \
+cargo run -- diff tests/fixtures/nested_a.json tests/fixtures/nested_b.json \
+  --schema tests/fixtures/nested_schema.json \
   --format-a nested_format \
   --format-b flat_format
+```
+
+### Library Examples
+
+See `examples/rust_library_usage.rs` for how to use diff-fusion as a library:
+
+```bash
+cargo run --example rust_library_usage
 ```
 
 ## License
