@@ -90,6 +90,7 @@
 //! "diff-fusion" = **fusion of formats for diffing**, not fusion/merging of data values.
 
 // Internal modules (implementation details)
+mod cif_trait;
 mod compare;
 mod transform;
 
@@ -100,17 +101,17 @@ pub mod types;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-// ============================================
-// PRIMARY USER-FACING API (Facade Layer)
-// ============================================
-// Users should primarily use these high-level types
+// ============================================================
+// PRIMARY API (Most users start here)
+// ============================================================
+pub use cif_trait::{CifSchema, compare_cif, diff_cif};
 pub use facade::{DiffFusion, DiffFusionBuilder};
 
 // ============================================
 // SECONDARY API (For Advanced Users)
 // ============================================
 // Export types and traits for users who need them
-pub use types::{CifFieldDefinition, CifSchema, CifType, ConflictStrategy, FieldTransformation};
+pub use types::{CifFieldDefinition, CifType, ConflictStrategy, FieldTransformation};
 
 // ============================================
 // LEGACY/UTILITY API (For Backward Compatibility)
