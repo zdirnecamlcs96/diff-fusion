@@ -1,8 +1,8 @@
 use serde_json::Value;
 use std::error::Error;
 
-use crate::compare::compare_json;
-use crate::transform::Transformer;
+use crate::domain::compare::compare_json;
+use crate::application::transform::Transformer;
 use crate::{Conflict, ConflictReport};
 
 /// Main entry point for the diff-fusion library

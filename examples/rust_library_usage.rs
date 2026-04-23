@@ -2,7 +2,7 @@
 
 use diff_fusion::{
     ConflictReport, compare_json, compare_json_string, transform_to_cif, transform_to_cif_string,
-    types::{CifFieldDefinition, CifSchema},
+    domain::types::{CifFieldDefinition, Schema},
 };
 use serde_json::json;
 
@@ -206,7 +206,7 @@ fn example_5_trait_schema() {
 
     // Define a Product schema using the CifSchema trait
     struct Product;
-    impl CifSchema for Product {
+    impl Schema for Product {
         fn schema_name() -> &'static str {
             "product"
         }

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>diff-fusion · playground</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>diff-fusion <span class="accent">·</span> playground</h1>
+  <p class="sub">Define a policy, paste two systems' data, watch reconciliation happen stage by stage.</p>
+</header>
+
+<main>
+  <!-- ========================= GUIDE ========================= -->
+  <details class="guide">
+    <summary>How to use this playground</summary>
+    <div class="guide-body">
+      <h3>The five inputs</h3>
+      <ul>
+        <li><b>System A / System B</b> — raw JSON from each system. Shapes can differ.</li>
+        <li><b>Schema</b> — <code>cif_schema</code> (target fields) + <code>transformations.&lt;format&gt;</code> (how each system's JSON maps into the CIF).</li>
+        <li><b>Policy</b> — per-field merge rules. See reference below.</li>
+        <li><b>Ancestor</b> — the last-synced canonical state. Leave blank for a first sync.</li>
+        <li><b>System A / B name</b> — must match both <code>schema.transformations.&lt;name&gt;</code> and any <code>owned_by.system</code> in the policy.</li>
+      </ul>
+
+      <h3>Policy reference</h3>
+<pre>{
+  "per_field": {
+    "price":     { "kind": "owned_by", "system": "erp" },
+    "qty_recv":  { "kind": "additive" },
+    "tags":      { "kind": "append" },
+    "po_status": {
+      "kind": "state_machine",
+      "transitions": [
+        { "from": "open", "to": "closed" }
+      ]
+    }
+  }
+}</pre>
+
+      <p>Supported <code>kind</code>:</p>
+      <ul>
+        <li><code>owned_by</code> — one system wins; other side's change reverts. Requires <code>system</code>.</li>
+        <li><code>additive</code> — numeric counters; both sides' deltas vs ancestor accumulate.</li>
+        <li><code>append</code> — arrays; both sides' additions concatenate.</li>
+        <li><code>state_machine</code> — enum fields; only listed <code>(from, to)</code> transitions pass. Requires <code>transitions</code>.</li>
+      </ul>
+      <p>Fields not listed that changed on both sides produce a <code>NoPolicy</code> conflict.</p>
+
+      <h3>The five stages</h3>
+      <ol>
+        <li><b>Transform A → CIF</b> and <b>Transform B → CIF</b> — applied in parallel (they're independent).</li>
+        <li><b>3-way Diff</b> — A vs Ancestor, B vs Ancestor, A vs B. Blank ancestor is treated as <code>{}</code>.</li>
+        <li><b>Policy Resolution</b> — dry-run. Shows <code>would_write</code> and any conflicts that would escalate.</li>
+        <li><b>Outcome</b> — real sync. One of <code>Synced</code>, <code>Escalated</code>, <code>NoOp</code>.</li>
+      </ol>
+
+      <h3>Quick recipes</h3>
+      <ul>
+        <li><b>Trigger a conflict</b> — change <code>state_machine.transitions</code> to only allow <code>draft → open</code>. The seeded data drifts to <code>closed</code> from <code>open</code>, so the rule rejects it.</li>
+        <li><b>First sync</b> — clear the Ancestor field entirely.</li>
+        <li><b>NoPolicy</b> — delete <code>"price"</code> from <code>per_field</code>; both sides changed it, no rule → conflict.</li>
+        <li><b>Swap owner</b> — change <code>owned_by.system</code> from <code>"erp"</code> to <code>"inv"</code>, or rename via the name inputs.</li>
+      </ul>
+    </div>
+  </details>
+  <!-- ========================= INPUTS ========================= -->
+  <section class="inputs">
+    <div class="input-grid">
+      <label class="field">
+        <span class="field-title">System A <small id="a-name-label">(system_a)</small></span>
+        <textarea id="system_a" spellcheck="false"></textarea>
+      </label>
+      <label class="field">
+        <span class="field-title">System B <small id="b-name-label">(system_b)</small></span>
+        <textarea id="system_b" spellcheck="false"></textarea>
+      </label>
+      <label class="field">
+        <span class="field-title">Schema <small>(CIF + transformations)</small></span>
+        <textarea id="schema" spellcheck="false"></textarea>
+      </label>
+      <label class="field">
+        <span class="field-title">Policy <small>(per-field merge rules)</small></span>
+        <textarea id="policy" spellcheck="false"></textarea>
+      </label>
+      <label class="field field-wide">
+        <span class="field-title">Ancestor <small>(optional — leave blank for first sync)</small></span>
+        <textarea id="ancestor" spellcheck="false"></textarea>
+      </label>
+    </div>
+
+    <div class="controls">
+      <div class="name-inputs">
+        <label>System A name <input type="text" id="system_a_name" value="system_a"></label>
+        <label>System B name <input type="text" id="system_b_name" value="system_b"></label>
+      </div>
+      <button id="run-btn" type="button">Run Sync ▶</button>
+      <button id="reset-btn" type="button" class="secondary">Reset to sample</button>
+      <span id="status-msg" class="status-msg"></span>
+    </div>
+  </section>
+
+  <!-- ========================= PIPELINE ========================= -->
+  <section class="pipeline">
+    <h2>Pipeline</h2>
+    <div class="stages" id="stages">
+      <div class="parallel-group">
+        <span class="parallel-label">parallel</span>
+        <div class="stage" data-stage="transform_a">
+          <div class="stage-head">
+            <span class="dot"></span>
+            <span class="stage-title">1a. Transform A → CIF</span>
+          </div>
+          <pre class="stage-body"></pre>
+        </div>
+        <div class="stage" data-stage="transform_b">
+          <div class="stage-head">
+            <span class="dot"></span>
+            <span class="stage-title">1b. Transform B → CIF</span>
+          </div>
+          <pre class="stage-body"></pre>
+        </div>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="stage" data-stage="diff">
+        <div class="stage-head">
+          <span class="dot"></span>
+          <span class="stage-title">2. 3-way Diff</span>
+        </div>
+        <pre class="stage-body"></pre>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="stage" data-stage="policy">
+        <div class="stage-head">
+          <span class="dot"></span>
+          <span class="stage-title">3. Policy Resolution</span>
+        </div>
+        <pre class="stage-body"></pre>
+      </div>
+      <div class="arrow"></div>
+
+      <div class="stage" data-stage="outcome">
+        <div class="stage-head">
+          <span class="dot"></span>
+          <span class="stage-title">4. Outcome</span>
+        </div>
+        <pre class="stage-body"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= OUTCOME DETAIL ========================= -->
+  <section class="outcome-detail" id="outcome-detail" hidden>
+    <h2>Outcome detail</h2>
+    <div id="outcome-summary" class="outcome-summary"></div>
+    <div id="outcome-conflicts" class="conflicts" hidden>
+      <h3>Conflicts</h3>
+      <ul id="conflicts-list"></ul>
+    </div>
+    <div id="outcome-merged" class="merged" hidden>
+      <h3>Merged CIF (would write)</h3>
+      <pre id="merged-pre"></pre>
+    </div>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

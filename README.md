@@ -1,29 +1,46 @@
 # diff-fusion
 
-**A Rust library and CLI tool for detecting conflicts between different JSON formats.**
+**A Rust library for two-way reconciliation between authoritative systems.**
 
-Think `git diff` for JSON data across multiple systems - transform to a common format (CIF), then compare and report differences. **You resolve conflicts manually**, just like Git.
+Transform each system's JSON to a canonical format (CIF), compute a
+three-way diff against a stored ancestor, resolve per-field merge policies,
+and push the result back — with optimistic concurrency and deterministic
+idempotency keys. Unresolvable conflicts route to a review queue with full
+provenance.
 
-> **Name Explained:** "fusion" = fusing different formats into CIF for comparison, not merging/syncing data
+The library is built up in layers. The detection-only sub-use-case (the
+`DiffFusion` facade below) still works standalone — use it if you want a
+JSON diff without the reconciliation machinery.
 
-## What This Tool Does
+> **Name Explained:** "fusion" = fusing different formats into CIF for comparison, not merging/syncing data blindly.
+
+## What This Library Does
 
 ```
-System A JSON → CIF ← System B JSON
-                 ↓
-         Compare & Report
-                 ↓
-        "Field X differs"
-                 ↓
-         You Decide What To Do
+System A ─▶ Canonical ─┐
+                       ├─ Three-way diff (A, B, ancestor)
+System B ─▶ Canonical ─┘          │
+                                  ▼
+                              Resolve per-field policies
+                                  │
+                                  ├── clean: push stale side(s), commit ancestor LAST
+                                  └── conflicts: route to escalation queue
 ```
 
-**Like `git diff`:**
+**What you get:**
 
-- ✅ Shows what changed
-- ✅ Detects conflicts
-- ❌ Does NOT merge automatically
-- ❌ Does NOT push changes back
+- ✅ Three-way diff with `source: A | B | Both` per field
+- ✅ Declarative merge policies (`OwnedBy`, `Additive`, `Append`, `StateMachine`, `SetByKey`)
+- ✅ Optimistic concurrency + idempotency keys on every push
+- ✅ Escalation queue for the ~5% of conflicts that require human judgement
+- ✅ Shadow mode — diff without pushing, for validating new adapters
+- ✅ Conflict taxonomy (`NoPolicy` / `PolicyConflict` / `InvariantViolation`) so callers can branch disposition per class
+- ✅ Durable filesystem-backed ancestor store (`adapters::filesystem_ancestor`)
+- ✅ `SyncEngine` facade — one builder, no `Arc<dyn …>` ceremony; full layered module tree (`domain / application / ports / adapters / drivers`)
+- ✅ The detection-only facade (`DiffFusion`) stays available as a Tier-0 entry point
+
+**What it's *not*:** a workflow engine, a real-time event bus, a generic
+ETL tool, or a CRDT. See `ROADMAP.md` for the out-of-scope list and why.
 
 ## The Problem
 

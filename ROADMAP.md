@@ -1,862 +1,215 @@
-# Roadmap: Schema Evolution & Project Scope
+# Roadmap: diff-fusion
 
-## Project Scope & Boundaries
+## A note on scope
 
-### ✅ IN SCOPE - What diff-fusion DOES
+Earlier versions of this file (v0.1.x) drew a hard line: diff-fusion is
+"NOT a sync engine." That statement reflected where the code *was*, not
+where it was *going*. The real intent has always been **two-way
+reconciliation between two authoritative systems** — the JSON diff was
+the first primitive built toward that goal, not the end state.
 
-**Core Mission:** Transform, compare, and detect conflicts in JSON data across different formats.
-
-```
-System A → CIF ← System B
-         ↓
-    Compare & Report Conflicts
-```
-
-1. **Schema-Driven Transformation**
-   - Define CIF format once
-   - Transform any format to CIF
-   - Linear scaling (n transformers, not n²)
-
-2. **Conflict Detection**
-   - Compare CIF objects
-   - Report all differences
-   - Field-level granularity
-
-3. **Source of Truth Metadata**
-   - Document which system owns which fields
-   - Provide conflict resolution hints
-   - Enable automated decision-making
-
-4. **Type System**
-   - CIF type definitions
-   - Runtime validation
-   - Compile-time safety (traits)
-
-**Role:** Foundation/Building Block for sync systems
-
-### ❌ OUT OF SCOPE - What diff-fusion DOES NOT DO
-
-**NOT a sync engine.** These require different infrastructure:
-
-1. **Bidirectional Write Operations**
-   - Writing data back to System A
-   - Writing data back to System B
-   - Database/API update operations
-   - Transaction management
-
-2. **Conflict Resolution Execution**
-   - Automatically applying resolution strategies
-   - Choosing which value to keep
-   - Merging conflicting values
-   - Business logic implementation
-
-3. **Sync Orchestration**
-   - Scheduling periodic syncs
-   - Event-driven triggers
-   - Retry mechanisms
-   - Dead letter queues
-
-4. **Infrastructure Concerns**
-   - Message queues (Kafka, RabbitMQ)
-   - Event sourcing
-   - Distributed transactions
-   - State management
-   - Monitoring & alerting
-
-5. **Business Logic**
-   - Approval workflows
-   - Manual review queues
-   - Custom merge strategies
-   - Domain-specific rules
-
-**Why out of scope?**
-
-- Different complexity class (stateful vs stateless)
-- Requires infrastructure (not a library concern)
-- Business-specific (every company has different rules)
-- Better served by orchestration tools (Zapier, Fivetran, Airbyte)
-
-**Analogy:**
-
-- `diff-fusion` = `git diff` (shows differences)
-- Sync engine = `git merge + push + CI/CD` (does the work)
-
-### 🔗 How Users Build on Top
-
-```rust
-// 1. Use diff-fusion to detect conflicts (IN SCOPE)
-let diff_fusion = DiffFusion::new(schema);
-let report = diff_fusion.compare(&cif_a, &cif_b);
-
-// 2. User implements their own logic (OUT OF SCOPE)
-for conflict in report.conflicts {
-    match my_business_rules(&conflict) {
-        Resolution::UseA => my_db.write_to_system_a(conflict.old_value),
-        Resolution::UseB => my_db.write_to_system_b(conflict.new_value),
-        Resolution::Manual => my_queue.send_for_review(conflict),
-    }
-}
-```
+This roadmap makes the intent explicit. The out-of-scope list is now
+narrower; the feature set grows accordingly. If you rely on the old
+"detection-only" framing, the Tier-0 facade API (`DiffFusion`) still works
+unchanged — that's the entry point for the diff-only use case.
 
 ---
 
-## The Core Challenge
+## Scope
 
-When you introduce an **abstraction layer (CIF)** between systems, you face several challenges:
+### IN SCOPE
 
-1. **Schema Evolution**: How do you add/change CIF fields without breaking existing transformers?
-2. **Backward Compatibility**: How do old systems continue working when CIF changes?
-3. **Source of Truth**: Who decides what's correct when conflicts arise?
-4. **Resolution Strategies**: How do you support multiple conflict resolution approaches?
+diff-fusion reconciles two authoritative systems using a **three-way diff
+against a stored ancestor**, with per-field merge policies, optimistic
+concurrency on push, and an escalation queue for unresolved conflicts.
+
+```
+System A ──▶ Canonical ──┐
+                         ├── Three-way diff ──▶ Resolve ──▶ Push (both sides) ──▶ Commit ancestor
+System B ──▶ Canonical ──┘                                  ▲
+                                                            │
+                                  Stored ancestor ──────────┘
+```
+
+Concretely, diff-fusion provides:
+
+1. **Schema-driven canonical transformation** — map each external format to
+   a common intermediate format (CIF). Linear scaling with system count
+   (n transformers, not n²).
+2. **Three-way diff with provenance** — per-field `source: A | B | Both`,
+   which is the signal that makes policy resolution possible. Without it,
+   reconciliation degrades to timestamp tie-breaking.
+3. **Per-field merge policies** — tiered stack (Tier 1 strategies, Tier 2
+   invariants, Tier 3 structural merges). Declarative, inline with the
+   schema.
+4. **Optimistic concurrency on push** — every upsert asserts the previous
+   version. Mismatch → `StaleWrite` → restart the cycle.
+5. **Deterministic idempotency keys** — `hash(canonical_id + op + payload)`.
+   Retries collapse to no-ops.
+6. **Escalation queue** — unresolvable conflicts route to human review with
+   full provenance. They do not silently resolve.
+7. **Shadow mode** — pull-and-diff without pushing, for new-adapter
+   validation.
+
+### OUT OF SCOPE
+
+These are deliberately excluded. diff-fusion will say no or propose a
+different solution:
+
+- **Workflow engine** — reconciles state; does not orchestrate multi-step
+  business processes. Use Temporal, Airflow, or Step Functions for that.
+- **Real-time event bus** — batches in convergence windows. If you need
+  sub-second propagation for a specific field, that field probably wants
+  one-way ownership, not bidirectional sync.
+- **Generic "integration platform"** — one-way sync and ETL are not goals.
+  Use Fivetran, Airbyte, or Zapier.
+- **CRDT** — merge semantics are policy-based, not mathematically
+  convergent. The library accepts that some conflicts are genuine and
+  require human resolution. That's a feature, not a gap to close.
 
 ---
 
-## Current State (v0.1.0)
+## The hard rules
 
-✅ **What we have:**
+These are enforced in code and in review:
 
-- Schema-driven transformation to CIF
-- Conflict detection between two CIFs
-- Manual conflict resolution (user decides)
-- Source of truth metadata in schema
-- Conflict strategy hints
-- Field-level ownership documentation
-- Facade API for easy usage
-
-❌ **What we're missing:**
-
-- Schema versioning
-- Backward compatibility strategy
-- Automated resolution execution (intentionally out of scope)
-- Migration paths
-- Deprecation warnings
-
----
-
-## Roadmap
-
-### Phase 0: Scope Clarification (v0.1.1) - Current ✅
-
-**Status:** COMPLETED
-
-**Additions:**
-
-- ✅ Clear scope boundaries documented
-- ✅ Source of truth field metadata
-- ✅ Conflict strategy enum
-- ✅ Context separation patterns
-- ✅ Facade API for usability
-
-**Key Files:**
-
-- `src/facade.rs` - High-level user API
-- `src/types.rs` - Source of truth & conflict strategies
-- `examples/source_of_truth.rs` - Best practices
-- `ROADMAP.md` - This document
+1. **Last-write-wins is not a default strategy.** It lives in
+   `policy::escape_hatch::LastWriteWins` and requires a written `reason`
+   at construction time. Timestamp-based resolution fails at scale (clock
+   skew, batch windows) — research converges on this, going back to Saito &
+   Shapiro 2005 and the CRDT work that followed. Prefer `OwnedBy`,
+   `Additive`, or `StateMachine` first.
+2. **The ancestor update is the last step of a cycle.** Ordering:
+   resolve → push to stale sides → wait for confirmations → *then* commit
+   the new ancestor. Advancing the ancestor before pushes confirm is how
+   silent drift starts.
+3. **Every push carries an idempotency key** derived purely from inputs.
+   Non-deterministic keys (timestamps, random IDs) cause duplicate records.
+4. **Every push uses optimistic concurrency.** Adapters for systems
+   without native OCC fake it via read-before-write.
+5. **Webhook payloads are parsed only after signature verification.**
 
 ---
 
-### Phase 1: Schema Versioning (v0.2.0) - Foundation
+## Current state
 
-**Problem:** When you change CIF schema, all existing transformers break.
+The library is built up in layers. Each layer compiles and tests on its
+own — this was deliberate, bottom-up decomposition (the diff primitive is
+the kernel; everything else grows outward from it). The ordering mirrors
+Syncpal (Shekow, DAIS 2019) and Bayou (Terry et al., SOSP 1995): diff
+first, then reconcile.
 
-**Solution:** Add semantic versioning to schemas.
+| Layer | Module | Status |
+| ----- | ------ | ------ |
+| Two-way diff | `compare` | ✅ shipped |
+| Canonical transformation | `transform`, `cif_trait` | ✅ shipped |
+| Three-way diff with provenance | `diff::three_way` | ✅ shipped |
+| Ancestor store (trait + in-memory) | `ancestor` | ✅ shipped |
+| Idempotency keys | `idempotency` | ✅ shipped |
+| Error categories | `error` | ✅ shipped |
+| Tier 1 policies | `policy::{owned_by, additive, append, state_machine}` | ✅ shipped |
+| Escape hatch (LWW w/ reason) | `policy::escape_hatch` | ✅ shipped |
+| Tier 2 invariants | `policy::invariants` | ✅ shipped |
+| Tier 3 structural merges | `policy::structural` | ✅ shipped |
+| Port trait + capabilities | `port` | ✅ shipped |
+| In-memory reference adapter | `adapters::test_memory` | ✅ shipped |
+| Shared contract test suite | `tests/integration/contract_tests.rs` | ✅ shipped |
+| Escalation queue | `ports::escalation` + `adapters::in_memory_escalation` | ✅ shipped |
+| Orchestrator cycle (pull → diff → resolve → push → commit) | `application::orchestrator` | ✅ shipped |
+| Shadow mode | `application::orchestrator::run_shadow` | ✅ shipped |
+| `SyncEngine` facade | `drivers::sync_engine` | ✅ shipped |
+| Invariants wired into cycle | `application::orchestrator` | ✅ shipped |
+| Conflict taxonomy (class per conflict) | `application::policy::ConflictClass` | ✅ shipped |
+| Filesystem ancestor store | `adapters::filesystem_ancestor` | ✅ shipped |
+| Layered directory structure (domain / application / ports / adapters / drivers) | `src/` tree | ✅ shipped |
 
-```json
-{
-  "schema_version": "1.0.0",
-  "cif_schema": {
-    "product_id": {"type": "string", "required": true},
-    "product_price": {"type": "number", "required": true}
-  },
-  "transformations": {
-    "format_a": {
-      "compatible_versions": ["1.0.0", "1.1.0"],
-      "product_id": {"source_path": "id", "type": "string"}
-````
+### Verified by tests
 
-**Implementation:**
-
-```rust
-pub struct Schema {
-    pub version: Version,  // SemVer
-    pub cif_schema: Value,
-    pub transformations: HashMap<String, Transformation>,
-}
-
-pub fn validate_compatibility(
-    schema_version: &Version,
-    transformer_versions: &[Version],
-) -> Result<(), CompatibilityError>
-```
-
-**Benefits:**
-
-- Detect incompatible transformers at runtime
-- Fail fast with clear error messages
-- Document which versions work together
-
----
-
-### Phase 2: Field Deprecation (v0.3.0) - Graceful Changes
-
-**Problem:** You want to rename `product_price` → `price` but existing systems still use old field.
-
-**Solution:** Support field aliases and deprecation warnings.
-
-```json
-{
-  "schema_version": "2.0.0",
-  "cif_schema": {
-    "product_id": {"type": "string", "required": true},
-    "price": {
-      "type": "number",
-      "required": true,
-      "aliases": ["product_price"],  // NEW!
-      "deprecated_fields": {
-        "product_price": {
-          "since": "2.0.0",
-          "remove_in": "3.0.0",
-          "message": "Use 'price' instead"
-        }
-      }
-    }
-  }
-}
-```
-
-**Implementation:**
-
-```rust
-pub struct FieldMetadata {
-    pub aliases: Vec<String>,
-    pub deprecated_since: Option<Version>,
-    pub remove_in: Option<Version>,
-    pub migration_guide: Option<String>,
-}
-
-pub fn transform_with_warnings(
-    source: &Value,
-    schema: &Schema,
-) -> Result<(Value, Vec<DeprecationWarning>), Error>
-```
-
-**Output Example:**
-
-```
-⚠️  Warning: Field 'product_price' is deprecated since v2.0.0
-   Will be removed in v3.0.0
-   Migration: Use 'price' instead
-
-✅ Transformation successful (with 1 deprecation warning)
-```
+- Property: three-way diff of `(anc, anc, anc)` is empty; swapping A and B
+  inverts `source` without changing the set of entries.
+- Property: `Additive` is commutative under A/B swap.
+- End-to-end: ancestor advances only after both pushes confirm; a seeded
+  conflict lands in the escalation queue and neither side is mutated.
+- Contract suite: an adapter is "done" when it passes every test in
+  `run_contract_suite`. No judgement calls.
 
 ---
 
-### Phase 3: Migration Scripts (v0.4.0) - Safe Transitions
+## Not yet built
 
-**Problem:** How do you migrate data from schema v1 to v2?
+In priority order. Each item has a clear driver — if the driver doesn't
+apply yet, the work waits.
 
-**Solution:** Built-in migration support.
+### Durable persistence
 
-```json
-{
-  "schema_version": "2.0.0",
-  "migrations": [
-    {
-      "from": "1.0.0",
-      "to": "2.0.0",
-      "script": "migrations/v1_to_v2.json"
-    }
-  ]
-}
-```
+- ✅ **`FilesystemAncestorStore`** — JSON-per-entity, atomic writes via
+  tempfile+rename, hashed filenames for arbitrary canonical_id strings.
+  Suitable for single-process deployments.
+- ⏳ SQLite / Postgres ancestor store — for multi-process concurrency.
+- ⏳ Durable escalation queue (SQS / Postgres / similar) — the in-memory
+  queue still loses items on restart.
 
-**Migration Script (v1_to_v2.json):**
+Driver for the remaining items: first real integration with a live system.
 
-```json
-{
-  "operations": [
-    {
-      "type": "rename_field",
-      "old": "product_price",
-      "new": "price"
-    },
-    {
-      "type": "add_field",
-      "name": "currency",
-      "default": "USD"
-    },
-    {
-      "type": "transform_field",
-      "field": "stock",
-      "operation": "ensure_positive"
-    }
-  ]
-}
-```
+### First real adapter
 
-**Implementation:**
+Pick one authentic integration pair and build one adapter end-to-end.
+Until this happens, the port trait and capability flags are under-pressured
+by synthetic tests alone.
 
-```rust
-pub fn migrate_cif(
-    old_cif: &Value,
-    from_version: &Version,
-    to_version: &Version,
-    schema: &Schema,
-) -> Result<Value, MigrationError>
+Candidates (not chosen yet): Shopify + Amazon, NetSuite + internal
+service, custom REST-pair. The contract test suite makes "is this adapter
+done?" a test question, not a judgement call.
 
-// CLI command
-cargo run -- migrate \
-  --input old_data.json \
-  --from-version 1.0.0 \
-  --to-version 2.0.0 \
-  --schema schema.json
-```
+### Schema-carried policy declarations
+
+`policy::declaration::MergePolicyRef` is serde-ready but not yet wired into
+the existing JSON schema parser in `transform.rs`. The bridge function
+lets users declare policies in their schema JSON and build a runtime
+`PolicyMap` from it. Deferring until a real use case demands it.
+
+### Observability
+
+Metrics (cycles run, conflicts escalated, stale-write restarts), tracing
+spans per cycle, and structured logging. Deferred until deployed.
+
+### Webhook ingestion path
+
+The port trait declares `parse_webhook` / `verify_webhook` methods but
+they're not yet part of the orchestrator's triggered flow. Needs a real
+webhook source to design against.
 
 ---
 
-### Phase 4: Conflict Resolution Strategies (v0.5.0) - Pluggable Logic
+## What changed from v0.1.0 and why
 
-**Problem:** Different scenarios need different resolution strategies.
+| v0.1.0 | Now | Reason |
+| ------ | --- | ------ |
+| "NOT a sync engine" | Two-way sync is in scope | The stated goal all along; the v0.1 scope was the current state, not the target |
+| `ConflictStrategy` enum with `LastWriteWins` as a peer strategy | `policy::escape_hatch::LastWriteWins` with mandatory `reason`; Tier 1 strategies are `OwnedBy`, `Additive`, `Append`, `StateMachine`, `SetByKey` | LWW-by-default is a known anti-pattern at scale (Saito & Shapiro; CRDT motivation) — it's an escape hatch, not a first choice |
+| Source-of-truth was a free-text metadata field | `policy::owned_by::OwnedBy` is a first-class strategy with runtime enforcement | Declarative ownership resolves ~80% of conflicts before they arise (App.md § 03) |
+| No ancestor, no three-way diff | Three-way diff against a stored ancestor | Without an ancestor, "A changed" and "both changed" are indistinguishable and silent overwrites become possible |
+| No per-push idempotency or OCC | Both required at the port level | Direct fix for the duplicate-record and silent-overwrite classes of bug |
 
-**Solution:** Support multiple strategies with clear APIs.
-
-```rust
-pub trait ConflictResolver {
-    fn resolve(&self, conflict: &Conflict) -> ResolvedValue;
-}
-
-// Built-in strategies
-pub struct LastWriteWins;
-pub struct FirstWriteWins;
-pub struct ManualResolve;
-pub struct HighestValueWins;
-pub struct CustomLogic(Box<dyn Fn(&Conflict) -> ResolvedValue>);
-
-// Usage
-let resolver = LastWriteWins;
-let resolved = resolver.resolve(&conflict);
-```
-
-**Schema Configuration:**
-
-```json
-{
-  "conflict_resolution": {
-    "default_strategy": "last-write-wins",
-    "field_strategies": {
-      "stock": {
-        "strategy": "highest-value",
-        "reason": "Never decrease stock automatically"
-      },
-      "price": {
-        "strategy": "manual",
-        "reason": "Pricing changes need approval"
-      },
-      "description": {
-        "strategy": "last-write-wins",
-        "reason": "Latest description is usually correct"
-      }
-    }
-  }
-}
-```
-
-**CLI Example:**
-
-```bash
-# Auto-resolve with strategy
-cargo run -- resolve \
-  --conflicts conflicts.json \
-  --strategy last-write-wins \
-  --output resolved.json
-
-# Manual review
-cargo run -- resolve \
-  --conflicts conflicts.json \
-  --strategy manual \
-  --interactive
-```
+The existing `DiffFusion` facade (from `src/facade.rs`) is unchanged.
+Users doing detection-only can ignore the rest of the library.
 
 ---
 
-### Phase 5: Source of Truth Configuration (v0.6.0) - Clear Authority
-
-**Problem:** When System A and System B conflict, who's right?
-
-**Solution:** Declare authority per field type.
-
-```json
-{
-  "source_of_truth": {
-    "inventory": "system_a",
-    "pricing": "system_b",
-    "product_description": "system_c",
-    "customer_data": "latest_timestamp"
-  },
-  "authority_rules": [
-    {
-      "field": "stock",
-      "authority": "system_a",
-      "reason": "ERP is master for inventory"
-    },
-    {
-      "field": "display_price",
-      "authority": "system_b",
-      "reason": "Shopify controls customer-facing prices"
-    },
-    {
-      "field": "shipping_address",
-      "authority": "latest",
-      "reason": "Customer can update from any system"
-    }
-  ]
-}
-```
-
-**Implementation:**
-
-```rust
-pub struct AuthorityRule {
-    pub field: String,
-    pub authority: Authority,
-    pub override_conditions: Vec<Condition>,
-}
-
-pub enum Authority {
-    System(String),           // Always trust System A
-    LatestTimestamp,          // Whoever wrote last
-    HighestValue,             // For quantities
-    ManualReview,             // Human decides
-    Custom(Box<dyn Fn(&Conflict) -> String>),
-}
-
-pub fn resolve_with_authority(
-    conflict: &Conflict,
-    rules: &[AuthorityRule],
-) -> ResolvedValue
-```
-
----
-
-### Phase 6: Backward Compatibility Layer (v0.7.0) - Bridge Old & New
-
-**Problem:** Old transformers can't handle new CIF schema.
-
-**Solution:** Automatic downgrade transformations.
-
-```rust
-pub struct CompatibilityLayer {
-    pub target_version: Version,
-    pub current_version: Version,
-}
-
-impl CompatibilityLayer {
-    // Automatically strip new fields for old clients
-    pub fn downgrade(&self, cif: &Value) -> Value {
-        match (self.current_version, self.target_version) {
-            (v2, v1) => {
-                // Remove v2-only fields
-                // Rename v2 fields to v1 names
-                // Apply backwards transformations
-            }
-        }
-    }
-}
-```
-
-**Schema Configuration:**
-
-```json
-{
-  "schema_version": "2.0.0",
-  "backward_compatibility": {
-    "support_versions": ["1.0.0", "1.1.0", "1.2.0"],
-    "field_mappings": {
-      "1.x": {
-        "price": "product_price",  // Map v2 back to v1
-        "currency": null            // Remove in v1
-      }
-    }
-  }
-}
-```
-
-**Automatic Bridge:**
-
-```rust
-// Transformer written for v1.0.0
-let transformer_v1 = load_transformer("system_a", "1.0.0");
-
-// Current schema is v2.0.0
-let schema_v2 = load_schema("2.0.0");
-
-// Automatically bridge
-let cif_v2 = transform_to_cif(&data, &schema_v2, "system_a")?;
-let cif_v1 = schema_v2.downgrade_to(&transformer_v1.version)?;
-
-// v1 transformer can now work with v2 data! ✅
-```
-
----
-
-### Phase 7: Deprecation Timeline (v1.0.0) - Clear Sunset Path
-
-**Problem:** When can you safely remove deprecated fields?
-
-**Solution:** Enforce deprecation timelines with warnings.
-
-```json
-{
-  "deprecation_policy": {
-    "warning_period_months": 6,
-    "grace_period_months": 12,
-    "notification_channels": ["changelog", "api_warnings", "email"]
-  },
-  "deprecated_fields": {
-    "product_price": {
-      "deprecated_date": "2025-06-01",
-      "removal_date": "2026-06-01",
-      "migration_path": "Use 'price' field instead",
-      "affected_transformers": ["format_a", "format_b"]
-    }
-  }
-}
-```
-
-**Runtime Behavior:**
-
-```rust
-pub enum DeprecationStatus {
-    Active,
-    WarningPeriod { months_remaining: u32 },
-    GracePeriod { months_remaining: u32 },
-    Removed,
-}
-
-pub fn check_deprecation_status(
-    field: &str,
-    schema: &Schema,
-) -> DeprecationStatus {
-    // Calculate based on current date vs deprecation timeline
-}
-
-// Example output
-⚠️  DEPRECATION WARNING:
-    Field 'product_price' will be removed in 3 months (2026-03-01)
-    Affected transformers: format_a, format_b
-    Migration guide: https://docs.../migration-v1-to-v2
-
-    Update your transformer before removal date!
-```
-
----
-
-## Implementation Priority
-
-### Critical Path (Must Have)
-
-1. **Schema Versioning** (Phase 1) - Foundation for everything
-2. **Conflict Resolution Strategies** (Phase 4) - Core business value
-3. **Source of Truth** (Phase 5) - Solves authority problem
-
-### Important (Should Have)
-
-4. **Field Deprecation** (Phase 2) - Enables safe evolution
-5. **Backward Compatibility** (Phase 6) - Eases adoption
-
-### Nice to Have
-
-6. **Migration Scripts** (Phase 3) - Advanced use cases
-7. **Deprecation Timeline** (Phase 7) - Large-scale deployments
-
----
-
-## Example: Schema Evolution Journey
-
-### v1.0.0 - Initial Release
-
-```json
-{
-  "schema_version": "1.0.0",
-  "cif_schema": {
-    "product_id": {"type": "string", "required": true},
-    "product_price": {"type": "number", "required": true}
-  }
-}
-```
-
-### v1.1.0 - Add Optional Field (Non-breaking)
-
-```json
-{
-  "schema_version": "1.1.0",
-  "cif_schema": {
-    "product_id": {"type": "string", "required": true},
-    "product_price": {"type": "number", "required": true},
-    "currency": {"type": "string", "required": false, "default": "USD"}
-  }
-}
-```
-
-✅ Old transformers still work (currency is optional)
-
-### v2.0.0 - Rename Field (Breaking)
-
-```json
-{
-  "schema_version": "2.0.0",
-  "cif_schema": {
-    "product_id": {"type": "string", "required": true},
-    "price": {
-      "type": "number",
-      "required": true,
-      "aliases": ["product_price"],
-      "deprecated_fields": {
-        "product_price": {
-          "since": "2.0.0",
-          "remove_in": "3.0.0"
-        }
-      }
-    },
-    "currency": {"type": "string", "required": false, "default": "USD"}
-  },
-  "backward_compatibility": {
-    "support_versions": ["1.0.0", "1.1.0"]
-  }
-}
-```
-
-⚠️  Old transformers get deprecation warnings but still work
-
-### v3.0.0 - Remove Deprecated (Breaking)
-
-```json
-{
-  "schema_version": "3.0.0",
-  "cif_schema": {
-    "product_id": {"type": "string", "required": true},
-    "price": {"type": "number", "required": true},
-    "currency": {"type": "string", "required": true}  // Now required!
-  },
-  "migrations": [{
-    "from": "2.0.0",
-    "to": "3.0.0",
-    "operations": [
-      {"type": "remove_field", "name": "product_price"},
-      {"type": "require_field", "name": "currency"}
-    ]
-  }]
-}
-```
-
-❌ Old transformers MUST upgrade or use compatibility layer
-
----
-
-## Design Principles
-
-1. **Fail Fast**: Detect incompatibilities at startup, not runtime
-2. **Warn Early**: Deprecation warnings 6-12 months before removal
-3. **Provide Path**: Every breaking change includes migration guide
-4. **Support Old**: Maintain backward compatibility for N-2 versions
-5. **Document Everything**: Changelog with version compatibility matrix
-
----
-
-## Next Steps
-
-**For v0.2.0 (Next Release):**
-
-1. Add `schema_version` field to schema.json
-2. Implement version validation in `transform.rs`
-3. Add unit tests for version compatibility
-4. Update documentation with versioning examples
-5. Add CLI flag: `--strict-version` to enforce exact matches
-
-**Quick Win:** Start with semantic versioning validation. This gives you:
-
-- Foundation for all future work
-- Immediate value (catch compatibility issues)
-- Low implementation cost (~100 lines of code)
-
-Would you like me to implement Phase 1 (Schema Versioning) as a starting point? 🚀
-
----
-
-## For Users Building Sync Engines
-
-**If you need bidirectional sync, here's how to build on top of diff-fusion:**
-
-### Architecture Pattern
-
-```
-┌──────────────────────────────────────────────────┐
-│  Your Sync Orchestrator Application              │
-│                                                  │
-│  ┌────────────────────────────────────────┐     │
-│  │  diff-fusion (This Library)            │     │
-│  │  • Transform to CIF                    │     │
-│  │  • Detect conflicts                    │     │
-│  │  • Report differences                  │     │
-│  └────────────────────────────────────────┘     │
-│                    ↓                             │
-│  ┌────────────────────────────────────────┐     │
-│  │  Your Business Logic Layer             │     │
-│  │  • Apply resolution strategies         │     │
-│  │  • Implement retry logic               │     │
-│  │  • Handle transactions                 │     │
-│  └────────────────────────────────────────┘     │
-│                    ↓                             │
-│  ┌────────────────────────────────────────┐     │
-│  │  Your Data Access Layer                │     │
-│  │  • Write to System A API               │     │
-│  │  • Write to System B database          │     │
-│  │  • Manage connections                  │     │
-│  └────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────┘
-```
-
-### Recommended Tools & Patterns
-
-**For Sync Orchestration:**
-
-- **Temporal** - Workflow orchestration with retries
-- **Apache Airflow** - Scheduled data pipelines
-- **AWS Step Functions** - Serverless orchestration
-- **Celery** - Distributed task queue
-
-**For Conflict Resolution:**
-
-- **Redis** - Locking mechanism
-- **PostgreSQL** - Transaction management
-- **Event Sourcing** - Track all changes
-- **CQRS Pattern** - Separate reads/writes
-
-**For Monitoring:**
-
-- **Prometheus** - Metrics
-- **Grafana** - Dashboards
-- **Sentry** - Error tracking
-- **DataDog** - Full observability
-
-### Example Integration
-
-```rust
-use diff_fusion::DiffFusion;
-use tokio::time::{sleep, Duration};
-
-// Your sync engine that uses diff-fusion
-async fn sync_engine(
-    system_a_client: &SystemAClient,
-    system_b_client: &SystemBClient,
-    diff_fusion: &DiffFusion,
-) -> Result<(), SyncError> {
-    loop {
-        // 1. Fetch data from both systems
-        let data_a = system_a_client.fetch().await?;
-        let data_b = system_b_client.fetch().await?;
-
-        // 2. Use diff-fusion to detect conflicts
-        let report = diff_fusion.transform_and_compare(
-            &data_a, "system_a",
-            &data_b, "system_b",
-        )?;
-
-        // 3. Your business logic resolves conflicts
-        for conflict in report.conflicts {
-            let resolution = resolve_conflict(&conflict)?;
-
-            // 4. Your code writes back to systems
-            match resolution {
-                Resolution::UseA(value) => {
-                    system_b_client.update(&conflict.path, value).await?;
-                }
-                Resolution::UseB(value) => {
-                    system_a_client.update(&conflict.path, value).await?;
-                }
-                Resolution::Manual => {
-                    send_to_review_queue(conflict).await?;
-                }
-            }
-        }
-
-        // 5. Your orchestration decides when to sync again
-        sleep(Duration::from_secs(60)).await;
-    }
-}
-
-// Your business logic
-fn resolve_conflict(conflict: &Conflict) -> Result<Resolution, Error> {
-    // Check source of truth metadata from schema
-    match conflict.path.as_str() {
-        "price" => Ok(Resolution::UseB(conflict.new_value)), // Pricing system wins
-        "stock" => Ok(Resolution::UseA(conflict.old_value)), // Inventory wins
-        _ => Ok(Resolution::Manual), // Human review
-    }
-}
-```
-
-### Commercial Alternatives
-
-If building your own is too complex, consider:
-
-1. **Fivetran** ($100-$5000+/month) - Automated data connectors
-2. **Airbyte** (Open Source + Cloud) - 300+ pre-built connectors
-3. **Zapier** ($20-$600/month) - No-code automation
-4. **Mulesoft** (Enterprise) - Full integration platform
-5. **Segment** (Customer data) - Specialized for user tracking
-
-**When to build vs buy:**
-
-- Build: Unique business logic, cost-sensitive, need full control
-- Buy: Standard integrations, time-sensitive, need support
-
-### Open Source Reference Implementations
-
-Example projects that could use diff-fusion as a foundation:
-
-```rust
-// 1. Simple periodic sync
-// https://github.com/your-org/simple-sync
-// Uses: diff-fusion + cron + PostgreSQL
-
-// 2. Event-driven sync
-// https://github.com/your-org/event-sync
-// Uses: diff-fusion + Kafka + Redis
-
-// 3. API gateway sync
-// https://github.com/your-org/gateway-sync
-// Uses: diff-fusion + Axum + webhook handlers
-```
-
-**We may provide reference implementations in the future, but they will be separate projects.**
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Coding principles (Functional > SOLID for Rust)
-- Clean architecture guidelines
-- How to submit issues and PRs
-
----
-
-## Questions?
-
-**Scope Questions:**
-
-- "Can diff-fusion sync my databases?" → No, but you can build that with it
-- "Does it handle retries?" → No, that's orchestration layer
-- "Can it merge conflicts?" → It detects conflicts; you decide how to merge
-
-**Implementation Questions:**
-
-- "Which phase should I start with?" → Phase 1 (Schema Versioning)
-- "Can I contribute?" → Yes! See CONTRIBUTING.md
-- "Is this production-ready?" → Core features yes, advanced features coming
-
-Open an issue on GitHub for any other questions!
+## References
+
+The design is not novel; it synthesizes well-researched components.
+
+- Cockburn, A. *Hexagonal Architecture* (2005) — ports & adapters.
+- Evans, E. *Domain-Driven Design* (2003) — anti-corruption layer /
+  transformers.
+- Terry, D. B. et al. *Bayou* (SOSP 1995) — three-way reconciliation with
+  a stored ancestor.
+- Saito, Y. & Shapiro, M. *Optimistic Replication* (ACM CSur 2005) — why
+  LWW fails at scale.
+- Shekow, M. *Syncpal* (DAIS 2019) — iterative reconciliation algorithm
+  for file synchronizers; also a diff-first decomposition.
+- Shapiro, M. et al. *Conflict-Free Replicated Data Types* (INRIA 2011)
+  — the motivation for policy-based merges over timestamp-based ones.
+
+See `App.md` § 06 for the full provenance matrix.

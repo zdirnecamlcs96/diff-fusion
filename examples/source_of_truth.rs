@@ -1,11 +1,17 @@
-// Example: Source of Truth and Conflict Resolution Strategies
+// Example: Source of Truth and Conflict Resolution Strategies (legacy API)
 //
-// This demonstrates how to handle the question:
-// "Who is the source of truth when syncing between systems?"
+// This demonstrates the legacy `ConflictStrategy` hint attached to CIF
+// field definitions. New code should use the tiered policy stack in
+// `diff_fusion::application::policy` instead — see `examples/two_way_sync.rs`
+// for the SyncEngine-based approach using OwnedBy / Additive / StateMachine.
+//
+// This example is retained as documentation of the deprecated API;
+// `#![allow(deprecated)]` is used to keep compile output clean.
+#![allow(deprecated)]
 
 use diff_fusion::{
     DiffFusion,
-    types::{CifFieldDefinition, ConflictStrategy},
+    domain::types::{CifFieldDefinition, ConflictStrategy},
 };
 use serde_json::json;
 

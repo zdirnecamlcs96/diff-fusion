@@ -1,23 +1,47 @@
+// ConflictStrategy (below) is deprecated in favour of the policy stack in
+// crate::application::policy. This module still owns the type and its
+// builder methods for backward compatibility, so internal references are
+// expected — silence the self-inflicted warnings.
+#![allow(deprecated)]
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Conflict resolution strategies for fields without explicit source of truth
+/// Conflict resolution strategies for fields without explicit source of truth.
+///
+/// **Deprecated.** This enum predates the tiered policy stack in
+/// [`crate::application::policy`] and overlaps with it. New code should
+/// declare merge behaviour via [`crate::application::policy::MergePolicy`]
+/// implementations instead — `OwnedBy` replaces `PreferA` / `PreferB`,
+/// `Additive` replaces `UseMax` in its additive sense, `StateMachine`
+/// / `SetByKey` replace `Merge`, and `LastWriteWins` lives in
+/// [`crate::application::policy::escape_hatch`] with a mandatory
+/// justification.
+///
+/// This enum is preserved for backward compatibility with
+/// [`CifFieldDefinition::with_conflict_strategy`] and the existing schema
+/// JSON format.
+#[deprecated(
+    since = "0.2.0",
+    note = "use the tiered policy stack in crate::application::policy (OwnedBy, Additive, StateMachine, SetByKey). \
+            For timestamp-based resolution, use policy::escape_hatch::LastWriteWins with a written reason."
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ConflictStrategy {
-    /// Use the most recent value (requires timestamp metadata)
+    /// Use the most recent value (requires timestamp metadata).
     LastWriteWins,
-    /// Always prefer System A's value
+    /// Always prefer System A's value.
     PreferA,
-    /// Always prefer System B's value
+    /// Always prefer System B's value.
     PreferB,
-    /// Manual resolution required (raise error)
+    /// Manual resolution required (raise error).
     ManualResolve,
-    /// Use the larger/newer value (for numbers/dates)
+    /// Use the larger/newer value (for numbers/dates).
     UseMax,
-    /// Use the smaller/older value (for numbers/dates)
+    /// Use the smaller/older value (for numbers/dates).
     UseMin,
-    /// Merge values if possible (for arrays/objects)
+    /// Merge values if possible (for arrays/objects).
     Merge,
 }
 
@@ -109,7 +133,7 @@ impl CifFieldDefinition {
     ///
     /// # Examples
     /// ```
-    /// use diff_fusion::types::CifFieldDefinition;
+    /// use diff_fusion::domain::types::CifFieldDefinition;
     /// use serde_json::json;
     ///
     /// // Simple required field
@@ -165,7 +189,7 @@ impl CifFieldDefinition {
     ///
     /// # Examples
     /// ```
-    /// use diff_fusion::types::CifFieldDefinition;
+    /// use diff_fusion::domain::types::CifFieldDefinition;
     ///
     /// let field = CifFieldDefinition::new("number")
     ///     .required()
@@ -184,7 +208,7 @@ impl CifFieldDefinition {
     ///
     /// # Examples
     /// ```
-    /// use diff_fusion::types::{CifFieldDefinition, ConflictStrategy};
+    /// use diff_fusion::domain::types::{CifFieldDefinition, ConflictStrategy};
     ///
     /// let field = CifFieldDefinition::new("number")
     ///     .with_conflict_strategy(ConflictStrategy::LastWriteWins)
@@ -224,7 +248,7 @@ impl CifFieldDefinition {
 ///
 /// # Examples
 /// ```
-/// use diff_fusion::types::{CifSchema, CifFieldDefinition};
+/// use diff_fusion::domain::types::{Schema, CifFieldDefinition};
 /// use serde_json::json;
 ///
 /// struct User {
@@ -232,7 +256,7 @@ impl CifFieldDefinition {
 ///     age: u32,
 /// }
 ///
-/// impl CifSchema for User {
+/// impl Schema for User {
 ///     fn schema_name() -> &'static str {
 ///         "user"
 ///     }
@@ -252,7 +276,7 @@ impl CifFieldDefinition {
 /// // Now you can generate JSON schema from the type
 /// let schema_json = User::to_json_schema();
 /// ```
-pub trait CifSchema {
+pub trait Schema {
     /// Get the schema name
     fn schema_name() -> &'static str;
 
@@ -463,7 +487,11 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_conflict_strategy() {
+        // This test exercises the deprecated ConflictStrategy API to guard
+        // backward compatibility. New code should use the tiered policy
+        // stack in crate::application::policy instead.
         let field = CifFieldDefinition::new("number")
             .with_conflict_strategy(ConflictStrategy::LastWriteWins)
             .with_description("Price");
@@ -489,7 +517,7 @@ mod tests {
 
         // Define a test schema
         struct TestUser;
-        impl CifSchema for TestUser {
+        impl Schema for TestUser {
             fn schema_name() -> &'static str {
                 "test_user"
             }

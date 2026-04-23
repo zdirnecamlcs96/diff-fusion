@@ -1,35 +1,35 @@
 //! # diff-fusion
 //!
-//! **A library for detecting conflicts between different JSON formats.**
+//! **A library for two-way reconciliation between authoritative systems.**
 //!
-//! Think `git diff` for JSON data across multiple systems. Transform to a
-//! common format (CIF), then compare and report differences.
+//! Transform each system's JSON to a canonical format (CIF), compute a
+//! three-way diff against a stored ancestor, resolve per-field merge
+//! policies, and push the result back — with optimistic concurrency and
+//! deterministic idempotency keys. Unresolvable conflicts route to an
+//! escalation queue for human review.
 //!
-//! ## What This Library Does
+//! See `ARCHITECTURE.md` for the layered module layout, `App.md` for the
+//! design rationale, and `New claude.md` for the rules of the road when
+//! working in the code.
 //!
-//! ```text
-//! System A JSON → CIF ← System B JSON
-//!                  ↓
-//!          Compare & Report
-//!                  ↓
-//!         "Field X differs"
-//!                  ↓
-//!          You Resolve It
+//! ## Layer map
+//!
+//! - [`domain`]      — pure computation: error categories, diffs, CIF types, idempotency keys
+//! - [`application`] — use cases: orchestrator, policies, presets, schema transformation
+//! - [`ports`]       — abstract interfaces: `SystemPort`, `AncestorStore`, `EscalationQueue`
+//! - [`adapters`]    — concrete implementations of the port traits
+//! - [`drivers`]     — user-facing entry points: `SyncEngine`, `DiffFusion`, CLI
+//!
+//! The dependency rule points inward: `domain ← application ← drivers`
+//! and `domain ← ports ← adapters ← drivers`. Nothing in an inner ring
+//! imports from an outer ring.
+//!
+//! ## Quickstart (detection-only, Tier-0 facade)
+//!
 //! ```
-//!
-//! **Like `git diff`:**
-//! - ✅ Shows what changed
-//! - ✅ Detects conflicts
-//! - ❌ Does NOT merge automatically
-//! - ❌ Does NOT write changes back
-//!
-//! ## Quick Start
-//!
-//! ```rust
 //! use diff_fusion::DiffFusion;
 //! use serde_json::json;
 //!
-//! // 1. Define your schema
 //! let schema = json!({
 //!     "cif_schema": {
 //!         "product_id": {"type": "string", "required": true},
@@ -47,10 +47,7 @@
 //!     }
 //! });
 //!
-//! // 2. Create facade
 //! let diff_fusion = DiffFusion::new(schema);
-//!
-//! // 3. Transform and compare
 //! let salesforce_data = json!({"Id": "SF-001", "Price__c": 29.99});
 //! let shopify_data = json!({"id": "SH-001", "variants": [{"price": 34.99}]});
 //!
@@ -59,68 +56,51 @@
 //!     &shopify_data, "shopify"
 //! ).unwrap();
 //!
-//! // 4. You decide what to do with conflicts
 //! for conflict in report.conflicts {
 //!     println!("{} differs: {} vs {}",
 //!         conflict.path, conflict.old_value, conflict.new_value);
-//!     // Your code resolves the conflict
 //! }
 //! ```
 //!
-//! ## Core Concepts
+//! ## Quickstart (two-way reconciliation, Tier-1 facade)
 //!
-//! - **CIF (Common Intermediate Format)**: A unified schema that different formats transform into
-//! - **Transformation**: Converting format-specific JSON to CIF
-//! - **Comparison**: Detecting differences between two CIF objects
-//! - **Conflict Report**: A list of fields that differ
-//!
-//! ## What's NOT Included
-//!
-//! This library does NOT:
-//! - Merge data automatically
-//! - Write changes back to systems
-//! - Implement retry logic
-//! - Handle transactions
-//! - Manage sync orchestration
-//!
-//! Those are concerns for a sync engine that you build on top of this library.
-//!
-//! ## Name Explanation
-//!
-//! "diff-fusion" = **fusion of formats for diffing**, not fusion/merging of data values.
+//! Build a [`SyncEngine`](drivers::sync_engine::SyncEngine) from two
+//! adapters and a policy chain; call `.sync(entity_type, id)`. See
+//! `examples/two_way_sync.rs` for a runnable walkthrough.
 
-// Internal modules (implementation details)
-mod cif_trait;
-mod compare;
-mod transform;
+// ================= layer declarations =================
+pub mod adapters;
+pub mod application;
+pub mod domain;
+pub mod drivers;
+pub mod ports;
 
-// Public modules (user-facing API)
-pub mod facade;
-pub mod types;
+// ================= crate-root convenience re-exports =================
+// The most-used items, re-exported here so callers can write
+// `diff_fusion::SyncEngine` instead of `diff_fusion::drivers::sync_engine::SyncEngine`.
+pub use drivers::facade::{DiffFusion, DiffFusionBuilder};
+pub use drivers::sync_engine::{FacadeConflict, FacadePreview, SyncEngine, SyncOutcome};
+
+// Domain types that leak into public APIs.
+pub use domain::cif_trait::{CifSchema, compare_cif, diff_cif};
+pub use domain::compare::compare_json;
+pub use domain::error::SyncError;
+pub use domain::types::{CifFieldDefinition, CifType, FieldTransformation};
+// ConflictStrategy is deprecated; re-exported for backward compatibility.
+// External users of this path will see the deprecation warning attached
+// to the enum itself — this line only silences the re-export site.
+#[allow(deprecated)]
+pub use domain::types::ConflictStrategy;
+
+// Application types commonly constructed by users (for building policies).
+pub use application::transform::{Transformer, transform_to_cif};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-// ============================================================
-// PRIMARY API (Most users start here)
-// ============================================================
-pub use cif_trait::{CifSchema, compare_cif, diff_cif};
-pub use facade::{DiffFusion, DiffFusionBuilder};
+// ================= legacy free-function helpers =================
 
-// ============================================
-// SECONDARY API (For Advanced Users)
-// ============================================
-// Export types and traits for users who need them
-pub use types::{CifFieldDefinition, CifType, ConflictStrategy, FieldTransformation};
-
-// ============================================
-// LEGACY/UTILITY API (For Backward Compatibility)
-// ============================================
-// Pure functions - still available but not the primary interface
-pub use compare::compare_json;
-pub use transform::{Transformer, transform_to_cif};
-
-/// Conflict detected between two JSON values
+/// Conflict detected between two JSON values (detection-only API).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Conflict {
     pub path: String,
@@ -128,7 +108,7 @@ pub struct Conflict {
     pub new_value: String,
 }
 
-/// Summary of conflict detection results
+/// Summary of conflict detection results (detection-only API).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConflictReport {
     pub conflicts: Vec<Conflict>,
@@ -136,15 +116,7 @@ pub struct ConflictReport {
     pub total_conflicts: usize,
 }
 
-/// Transform JSON string to CIF (Common Intermediate Format)
-///
-/// # Arguments
-/// * `source_json` - JSON string to transform
-/// * `schema_json` - Schema definition JSON string
-/// * `format_id` - Format identifier (e.g., "format_a", "format_b")
-///
-/// # Returns
-/// Transformed JSON string in CIF format
+/// Transform JSON string to CIF (Common Intermediate Format).
 pub fn transform_to_cif_string(
     source_json: String,
     schema_json: String,
@@ -152,32 +124,19 @@ pub fn transform_to_cif_string(
 ) -> Result<String, String> {
     let source: Value =
         serde_json::from_str(&source_json).map_err(|e| format!("Invalid source JSON: {}", e))?;
-
     let schema: Value =
         serde_json::from_str(&schema_json).map_err(|e| format!("Invalid schema JSON: {}", e))?;
-
     let cif = transform_to_cif(&source, &schema, &format_id).map_err(|e| e.to_string())?;
-
     serde_json::to_string_pretty(&cif).map_err(|e| format!("Failed to serialize CIF: {}", e))
 }
 
-/// Compare two CIF JSON strings and return structured conflict report
-///
-/// # Arguments
-/// * `cif_a` - First CIF JSON string
-/// * `cif_b` - Second CIF JSON string
-///
-/// # Returns
-/// JSON string containing conflict report
+/// Compare two CIF JSON strings and return a structured conflict report.
 pub fn compare_json_string(cif_a: String, cif_b: String) -> Result<String, String> {
     let json_a: Value =
         serde_json::from_str(&cif_a).map_err(|e| format!("Invalid CIF A JSON: {}", e))?;
-
     let json_b: Value =
         serde_json::from_str(&cif_b).map_err(|e| format!("Invalid CIF B JSON: {}", e))?;
-
     let diffs = compare_json(&json_a, &json_b);
-
     let conflicts: Vec<Conflict> = diffs
         .into_iter()
         .map(|(path, (old_val, new_val))| Conflict {
@@ -186,13 +145,11 @@ pub fn compare_json_string(cif_a: String, cif_b: String) -> Result<String, Strin
             new_value: format!("{:?}", new_val),
         })
         .collect();
-
     let report = ConflictReport {
         has_conflicts: !conflicts.is_empty(),
         total_conflicts: conflicts.len(),
         conflicts,
     };
-
     serde_json::to_string_pretty(&report)
         .map_err(|e| format!("Failed to serialize conflict report: {}", e))
 }

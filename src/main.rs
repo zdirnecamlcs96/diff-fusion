@@ -1,7 +1,5 @@
-mod cli;
-
 use clap::Parser;
-use cli::{Cli, Commands};
+use diff_fusion::drivers::cli::{Cli, Commands};
 use colored::*;
 use diff_fusion::{compare_json, transform_to_cif};
 use serde_json::Value;
