@@ -85,6 +85,17 @@ pub trait MergePolicy: Send + Sync {
 
     /// Apply this policy to a single change.
     fn merge(&self, change: &FieldChange, ctx: &MergeContext) -> MergeOutcome;
+
+    /// Validate this policy's config against the CIF schema definition for
+    /// the field it will govern. `field_schema` is the value at
+    /// `schema.cif_schema.<path>` — policies that care about element
+    /// structure (e.g. `SetByKey`) read `.element` from it and verify
+    /// their anchor / identity fields are declared there. Default impl
+    /// returns no errors; policies with no schema-level invariants can
+    /// ignore this entirely.
+    fn validate_against_schema(&self, _field_schema: &Value) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Map from canonical field path to the policy that governs it.
@@ -119,6 +130,25 @@ impl PolicyMap {
             .get(path)
             .map(|b| b.as_ref())
             .or_else(|| self.default.as_deref())
+    }
+
+    /// Validate every registered policy against a full CIF schema JSON
+    /// (the structure with a top-level `cif_schema` object). Returns an
+    /// aggregated list of problems with each entry prefixed by its path.
+    /// An empty vec means everything lines up.
+    pub fn validate_against_schema(&self, schema: &Value) -> Vec<String> {
+        let mut errors = Vec::new();
+        let cif_schema = schema.get("cif_schema");
+        for (path, policy) in &self.by_path {
+            let field_schema = cif_schema
+                .and_then(|s| s.get(path))
+                .cloned()
+                .unwrap_or(Value::Null);
+            for e in policy.validate_against_schema(&field_schema) {
+                errors.push(format!("{path}: {e}"));
+            }
+        }
+        errors
     }
 }
 

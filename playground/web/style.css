@@ -552,13 +552,56 @@ button.secondary:hover {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
 }
-/* Column widths: narrow path + winner, wider value columns share the rest. */
-.fc-table th:nth-child(1) { width: 12%; }   /* path */
-.fc-table th:nth-child(2),
+/* Column widths: narrow path + policy + winner, wider value columns share
+   the rest. Seven columns total: path, policy, ancestor, A, B, written,
+   winner. */
+.fc-table th:nth-child(1) { width: 11%; }   /* path */
+.fc-table th:nth-child(2) { width: 12%; }   /* policy */
 .fc-table th:nth-child(3),
 .fc-table th:nth-child(4),
-.fc-table th:nth-child(5) { width: 20%; }   /* four value columns */
-.fc-table th:nth-child(6) { width: 8%; }    /* winner */
+.fc-table th:nth-child(5),
+.fc-table th:nth-child(6) { width: 16%; }   /* four value columns */
+.fc-table th:nth-child(7) { width: 9%; }    /* winner */
+
+/* Policy cell — stacked "kind" + per-arg detail. */
+.fc-table td.pol-cell {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.pol-kind {
+  color: var(--accent-strong);
+  font-weight: 600;
+  font-size: 11px;
+}
+.pol-kind.pol-none { color: var(--muted); font-weight: 400; }
+.pol-detail {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+/* Per-element digest for set_by_key array fields, stacked under the
+   written-value diff so the reader sees row-level status (added /
+   removed / re-homed) instead of having to eyeball an array blob. */
+.sbk-digest {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.45;
+  font-weight: 400;
+}
+.sbk-row { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sbk-unchanged { color: var(--muted); opacity: 0.6; }
+.sbk-same-edit { color: var(--muted); }
+.sbk-changed-in-a, .sbk-added-in-a, .sbk-removed-in-a { color: var(--ok); }
+.sbk-changed-in-b, .sbk-added-in-b, .sbk-removed-in-b { color: var(--accent-strong); }
+.sbk-changed-both, .sbk-added-divergent { color: var(--warn); }
+.sbk-removed-both { color: var(--err); opacity: 0.8; }
+.sbk-added-both { color: var(--ok); }
 
 .fc-table tbody td {
   padding: 7px 10px;

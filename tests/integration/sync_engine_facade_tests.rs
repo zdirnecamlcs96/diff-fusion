@@ -164,7 +164,7 @@ async fn set_by_key_merges_additions_from_both_sides() {
     );
 
     let engine = SyncEngine::builder(erp.clone(), inv.clone())
-        .policy("items", Box::new(SetByKey::new("sku")))
+        .policy("items", Box::new(SetByKey::new(vec!["sku".to_string()], "sku", "sku")))
         .seed_ancestor(ENTITY, ID, ancestor_state)
         .build();
 
@@ -200,7 +200,7 @@ async fn set_by_key_escalates_when_same_element_diverges() {
     inv.seed(ENTITY, ID, json!({"items": [{"sku": "X", "q": 20}]}));
 
     let engine = SyncEngine::builder(erp.clone(), inv.clone())
-        .policy("items", Box::new(SetByKey::new("sku")))
+        .policy("items", Box::new(SetByKey::new(vec!["sku".to_string()], "sku", "sku")))
         .seed_ancestor(ENTITY, ID, ancestor_state.clone())
         .build();
 
@@ -246,7 +246,7 @@ async fn set_by_key_honors_unilateral_deletion() {
     inv.seed(ENTITY, ID, json!({"items": [{"sku": "X"}, {"sku": "Y"}]}));
 
     let engine = SyncEngine::builder(erp.clone(), inv.clone())
-        .policy("items", Box::new(SetByKey::new("sku")))
+        .policy("items", Box::new(SetByKey::new(vec!["sku".to_string()], "sku", "sku")))
         .seed_ancestor(ENTITY, ID, ancestor_state)
         .build();
 
@@ -443,4 +443,85 @@ async fn unregistered_conflict_is_visible_without_knowing_inner_types() {
         }
         other => panic!("expected Escalated, got {other:?}"),
     }
+}
+
+// ---------------------------------------------------------------------
+// Tier 3 — schema-driven validation catches policy/schema mismatches
+// before the first cycle runs.
+// ---------------------------------------------------------------------
+
+#[test]
+fn validate_against_schema_passes_when_anchors_line_up() {
+    let schema = json!({
+        "cif_schema": {
+            "items": {
+                "type": "array",
+                "element": {
+                    "externalId": {"type": "string", "anchor": "a"},
+                    "internalId": {"type": "string", "anchor": "b"},
+                    "sku": {"type": "string"}
+                }
+            }
+        }
+    });
+    let erp = TestMemoryAdapter::new("erp");
+    let inv = TestMemoryAdapter::new("inv");
+    let builder = SyncEngine::builder(erp, inv).policy(
+        "items",
+        Box::new(SetByKey::new(vec!["sku".into()], "externalId", "internalId")),
+    );
+    assert!(builder.validate_against_schema(&schema).is_ok());
+}
+
+#[test]
+fn validate_against_schema_fails_when_anchor_field_missing() {
+    let schema = json!({
+        "cif_schema": {
+            "items": {
+                "type": "array",
+                "element": {
+                    // externalId declared, internalId missing
+                    "externalId": {"type": "string", "anchor": "a"},
+                    "sku": {"type": "string"}
+                }
+            }
+        }
+    });
+    let erp = TestMemoryAdapter::new("erp");
+    let inv = TestMemoryAdapter::new("inv");
+    let builder = SyncEngine::builder(erp, inv).policy(
+        "items",
+        Box::new(SetByKey::new(vec!["sku".into()], "externalId", "internalId")),
+    );
+    let errs = match builder.validate_against_schema(&schema) {
+        Ok(_) => panic!("expected validation errors, got Ok"),
+        Err(e) => e,
+    };
+    assert_eq!(errs.len(), 1);
+    assert!(errs[0].starts_with("items: "), "path prefix missing: {errs:?}");
+    assert!(errs[0].contains("b_anchor 'internalId'"));
+}
+
+#[test]
+fn validate_against_schema_fails_when_schema_omits_field_entirely() {
+    // Policy binds to a path that the schema doesn't declare at all —
+    // this is a gap worth failing on since the sync cycle cannot
+    // reason about element shape.
+    let schema = json!({
+        "cif_schema": {
+            "something_else": {"type": "string"}
+        }
+    });
+    let erp = TestMemoryAdapter::new("erp");
+    let inv = TestMemoryAdapter::new("inv");
+    let builder = SyncEngine::builder(erp, inv).policy(
+        "items",
+        Box::new(SetByKey::new(vec!["sku".into()], "externalId", "internalId")),
+    );
+    let errs = match builder.validate_against_schema(&schema) {
+        Ok(_) => panic!("expected validation errors, got Ok"),
+        Err(e) => e,
+    };
+    assert!(errs.iter().any(|e| e.contains("no CIF schema declared")),
+        "unexpected errors: {errs:?}");
 }

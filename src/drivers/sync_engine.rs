@@ -255,6 +255,25 @@ impl<A: SystemPort, B: SystemPort> SyncEngineBuilder<A, B> {
         fresh
     }
 
+    /// Validate the installed policies against a CIF schema before the
+    /// first cycle runs. For each registered policy, the field at
+    /// `schema.cif_schema.<path>` is inspected — `SetByKey` verifies that
+    /// its `a_anchor` / `b_anchor` fields exist with the matching
+    /// `anchor` roles, its `identity` fields exist, and any `nested`
+    /// policies line up with declared sub-arrays.
+    ///
+    /// Returns `Err(errors)` if any misalignment is found. Each message
+    /// is prefixed with the policy path. Call before `build()` to
+    /// fail fast on misconfigured policies rather than at first cycle.
+    pub fn validate_against_schema(self, schema: &Value) -> Result<Self, Vec<String>> {
+        let errors = self.policies.validate_against_schema(schema);
+        if errors.is_empty() {
+            Ok(self)
+        } else {
+            Err(errors)
+        }
+    }
+
     pub fn build(mut self) -> SyncEngine<A, B> {
         let ancestor = self.ancestor.take().unwrap_or_else(|| {
             let fresh = Arc::new(InMemoryAncestorStore::new());

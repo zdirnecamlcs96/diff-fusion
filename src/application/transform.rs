@@ -99,7 +99,34 @@ impl Transformer {
 
             // Extract value from source JSON
             if let Some(source_value) = Self::extract_value_by_path(source, source_path) {
-                // Type conversion/normalization
+                // Array of objects with a declared element shape: walk the
+                // source array and emit one CIF element per source element,
+                // using the element-level transformation rules. This is what
+                // lets cross-system array fields (e.g. `items`) carry both
+                // sides' stable anchors in a single canonical element type.
+                if target_type == "array" {
+                    if let Some(element_rules) = transform_rule.get("element") {
+                        let element_schema = cif_field_def.get("element");
+                        let arr = source_value.as_array().ok_or_else(|| {
+                            format!(
+                                "source value at '{source_path}' for field '{cif_field_name}' \
+                                 is not an array"
+                            )
+                        })?;
+                        let mut out_arr = Vec::with_capacity(arr.len());
+                        for elem in arr {
+                            out_arr.push(Self::transform_element(
+                                elem,
+                                element_rules,
+                                element_schema,
+                                cif_field_name,
+                            )?);
+                        }
+                        cif_object.insert(cif_field_name.to_string(), Value::Array(out_arr));
+                        return Ok(());
+                    }
+                }
+                // Scalar / opaque-array fallback (no element shape).
                 let normalized_value = Self::normalize_type(source_value, target_type)?;
                 cif_object.insert(cif_field_name.to_string(), normalized_value);
             } else {
@@ -119,6 +146,84 @@ impl Transformer {
             }
         }
         Ok(())
+    }
+
+    /// Transform a single source array element according to element rules.
+    /// Each rule key names a CIF element field; each rule value may itself
+    /// be `{source_path, type, element?}` (recursive) so arrays of arrays
+    /// of objects are expressible.
+    fn transform_element(
+        source_elem: &Value,
+        element_rules: &Value,
+        element_schema: Option<&Value>,
+        parent_field: &str,
+    ) -> Result<Value, Box<dyn Error>> {
+        let rules_obj = element_rules.as_object().ok_or_else(|| {
+            format!("transformation.element for '{parent_field}' must be an object")
+        })?;
+
+        let mut out = serde_json::Map::new();
+        for (elem_field, rule) in rules_obj {
+            let sub_source_path = rule
+                .get("source_path")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    format!(
+                        "element.{elem_field} for '{parent_field}' is missing source_path"
+                    )
+                })?;
+            let sub_target_type = rule.get("type").and_then(Value::as_str).unwrap_or("string");
+
+            // `source_path == "."` means "take the element itself" — useful
+            // when the source array holds scalars rather than objects.
+            let sub_source_value: Option<&Value> = if sub_source_path == "." {
+                Some(source_elem)
+            } else {
+                Self::extract_value_by_path(source_elem, sub_source_path)
+            };
+
+            if let Some(val) = sub_source_value {
+                let normalized = if sub_target_type == "array" && rule.get("element").is_some() {
+                    let nested_rules = rule.get("element").unwrap();
+                    let nested_schema = element_schema
+                        .and_then(|s| s.get(elem_field))
+                        .and_then(|f| f.get("element"));
+                    let arr = val.as_array().ok_or_else(|| {
+                        format!(
+                            "nested array '{parent_field}.{elem_field}' source is not an array"
+                        )
+                    })?;
+                    let mut nested_out = Vec::with_capacity(arr.len());
+                    for sub in arr {
+                        nested_out.push(Self::transform_element(
+                            sub,
+                            nested_rules,
+                            nested_schema,
+                            &format!("{parent_field}.{elem_field}"),
+                        )?);
+                    }
+                    Value::Array(nested_out)
+                } else {
+                    Self::normalize_type(val, sub_target_type)?
+                };
+                out.insert(elem_field.clone(), normalized);
+            } else {
+                // Element-level required check mirrors top-level behaviour.
+                let is_required = element_schema
+                    .and_then(|s| s.get(elem_field))
+                    .and_then(|f| f.get("required"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                if is_required {
+                    return Err(format!(
+                        "required element field '{parent_field}.{elem_field}' missing at \
+                         source_path '{sub_source_path}'"
+                    )
+                    .into());
+                }
+            }
+        }
+        Ok(Value::Object(out))
     }
 
     /// Extract a value from JSON by dot-notation path (e.g., "user.name")

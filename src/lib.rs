@@ -85,7 +85,7 @@ pub use drivers::sync_engine::{FacadeConflict, FacadePreview, SyncEngine, SyncOu
 pub use domain::cif_trait::{CifSchema, compare_cif, diff_cif};
 pub use domain::compare::compare_json;
 pub use domain::error::SyncError;
-pub use domain::types::{CifFieldDefinition, CifType, FieldTransformation};
+pub use domain::types::{AnchorRole, CifFieldDefinition, CifType, FieldTransformation};
 // ConflictStrategy is deprecated; re-exported for backward compatibility.
 // External users of this path will see the deprecation warning attached
 // to the enum itself — this line only silences the re-export site.

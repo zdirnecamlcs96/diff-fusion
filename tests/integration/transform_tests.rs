@@ -120,6 +120,97 @@ fn test_transform_missing_required_field() {
 }
 
 #[test]
+fn test_transform_array_of_objects_with_element_schema() {
+    // Cross-system array: System A's source carries `externalId` per line,
+    // System B's source carries `internalId`. The CIF element declares
+    // both as anchors so downstream SetByKey policies can rehome rows
+    // across renames.
+    let schema = json!({
+        "cif_schema": {
+            "items": {
+                "type": "array",
+                "required": true,
+                "element": {
+                    "externalId": {"type": "string", "anchor": "a"},
+                    "internalId": {"type": "string", "anchor": "b"},
+                    "sku": {"type": "string", "required": true},
+                    "qty": {"type": "number"}
+                }
+            }
+        },
+        "transformations": {
+            "erp": {
+                "items": {
+                    "source_path": "lineItems",
+                    "type": "array",
+                    "element": {
+                        "externalId": {"source_path": "extId", "type": "string"},
+                        "sku": {"source_path": "sku", "type": "string"},
+                        "qty": {"source_path": "quantity", "type": "number"}
+                    }
+                }
+            }
+        }
+    });
+
+    let source = json!({
+        "lineItems": [
+            {"extId": "A-1", "sku": "SKU-X", "quantity": 3},
+            {"extId": "A-2", "sku": "SKU-Y", "quantity": 5}
+        ]
+    });
+
+    let cif = transform_to_cif(&source, &schema, "erp").expect("transform");
+    let items = cif["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["externalId"], json!("A-1"));
+    assert_eq!(items[0]["sku"], json!("SKU-X"));
+    assert_eq!(items[0]["qty"], json!(3));
+    // internalId is declared on the CIF element but has no source path in
+    // the `erp` transformation, so it should simply be absent (populated
+    // later when B's row merges in via SetByKey Union).
+    assert!(items[0].get("internalId").is_none());
+}
+
+#[test]
+fn test_transform_array_element_required_field_missing_errors() {
+    let schema = json!({
+        "cif_schema": {
+            "items": {
+                "type": "array",
+                "element": {
+                    "sku": {"type": "string", "required": true}
+                }
+            }
+        },
+        "transformations": {
+            "erp": {
+                "items": {
+                    "source_path": "lineItems",
+                    "type": "array",
+                    "element": {
+                        "sku": {"source_path": "sku", "type": "string"}
+                    }
+                }
+            }
+        }
+    });
+
+    let source = json!({
+        "lineItems": [
+            {"sku": "SKU-X"},
+            {}  // missing required sku
+        ]
+    });
+
+    let err = transform_to_cif(&source, &schema, "erp").unwrap_err();
+    assert!(
+        err.to_string().contains("required element field 'items.sku'"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn test_transform_invalid_format_id() {
     let source = json!({"name": "Widget"});
     let schema = json!({

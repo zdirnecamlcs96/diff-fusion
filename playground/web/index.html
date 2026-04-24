@@ -47,45 +47,64 @@
         <li><code>additive</code> — numeric counters; both sides' deltas vs ancestor accumulate.</li>
         <li><code>append</code> — arrays; both sides' additions concatenate. (Does not dedupe.)</li>
         <li><code>state_machine</code> — enum fields; only listed <code>(from, to)</code> transitions pass. Requires <code>transitions</code>.</li>
-        <li><code>set_by_key</code> — arrays of objects. Elements are matched across systems by an <code>identity</code> that is either a single field name or a <strong>composite</strong> (array of field names, e.g. <code>["sku", "uom"]</code>). Optional stable anchors <code>a_anchor</code> / <code>b_anchor</code> give each side a per-row primary key (e.g. <code>externalId</code> / <code>internalId</code>) so rows that mutate an identity field still re-home to their original ancestor row. Optional <code>on_both_changed</code>: <code>union</code> (default — shallow-merges fields), <code>prefer_a</code>, <code>prefer_b</code>, <code>escalate</code>.</li>
+        <li><code>set_by_key</code> — arrays of objects. Elements are matched across systems by an <code>identity</code> that is either a single field name or a <strong>composite</strong> (array of field names, e.g. <code>["sku", "uom"]</code>). Stable anchors <code>a_anchor</code> / <code>b_anchor</code> are <strong>required</strong>: each side's own local primary key (e.g. <code>externalId</code> / <code>internalId</code>) so rows that mutate an identity field still re-home to their original ancestor row. Optional <code>on_both_changed</code>: <code>escalate</code> (default), <code>union</code> (shallow-merges fields), <code>prefer_a</code>, <code>prefer_b</code>. Optional <code>nested</code>: a map of field name → sub-<code>set_by_key</code> declaration; each named field is recursively merged as its own keyed array so per-line detail inside a matched parent element (e.g. <code>fulfillment.items[]</code>) survives the merge instead of being overwritten wholesale.</li>
       </ul>
       <p>Fields not listed that changed on both sides produce a <code>NoPolicy</code> conflict.</p>
 
+      <h3>Schema-declared array element shapes</h3>
+      <p>Array fields in <code>cif_schema</code> can declare their per-element
+      shape with an <code>element</code> block. Element fields marked with
+      <code>anchor: "a"</code> or <code>anchor: "b"</code> become structural
+      anchors that a <code>set_by_key</code> policy can verify against at
+      build time — the playground rejects misaligned configs before running
+      any sync. The <code>element</code> block also tells the transformer to
+      walk source arrays and emit per-element CIF objects (rather than
+      passing arrays through opaquely):</p>
+<pre>"items": {
+  "type": "array",
+  "element": {
+    "externalId": { "type": "string", "anchor": "a" },
+    "internalId": { "type": "string", "anchor": "b" },
+    "sku":        { "type": "string" },
+    "uom":        { "type": "string" },
+    "qty":        { "type": "number" }
+  }
+}</pre>
+      <p>Each side's transformation block then carries a matching
+      <code>element</code> map with per-field <code>source_path</code>
+      entries, so a side with only <code>externalId</code> (and no
+      <code>internalId</code> yet) produces CIF elements with just its own
+      anchor. The anchor-rehoming matcher takes it from there.</p>
+
       <h3>Array merges: the anchor rule</h3>
       <div class="rule-callout">
-        <p><strong>When you merge an array, the policy MUST name at least
-        one unique anchor per row.</strong> Without an anchor, the engine
-        has no way to know which A-row corresponds to which B-row, so it
-        either duplicates everything (<code>append</code>) or escalates.</p>
-        <p>An anchor can take either of two shapes — most real reconciliations
-        need both:</p>
+        <p><strong>Every <code>set_by_key</code> policy must declare both a
+        business <code>identity</code> and a per-side stable anchor.</strong>
+        Anchors aren't optional: in every real integration, one system hands
+        out immutable local IDs while business fields (SKU, UOM, line
+        number) stay editable. Without an anchor, a rename shows up as a
+        remove-plus-add and corrupts three-way diffing.</p>
         <ol>
-          <li><b>Business identity</b> (<code>identity</code>, required) —
+          <li><b>Business identity</b> (<code>identity</code>) —
             a field or tuple of fields that both systems populate and that
             uniquely name a row: <code>sku</code>, or <code>(sku, uom)</code>,
-            or <code>(sku, uom, lot)</code>, etc. This is what tells the
-            engine A-row X "is" B-row Y. Use a composite when the same sku
-            can appear on multiple lines with different configurations.</li>
-          <li><b>Per-system stable anchors</b> (<code>a_anchor</code> /
-            <code>b_anchor</code>, optional) — each side's own local primary
-            key (e.g. <code>externalId</code> on A, <code>internalId</code>
-            on B). Required whenever an identity field can mutate
-            (someone renames <code>uom</code>, moves a lot, changes a
-            warehouse). The ancestor stores both anchors, so the policy
-            can re-home each incoming row to its ancestor row via the
-            anchor <em>before</em> composite-identity matching runs.</li>
+            or <code>(sku, uom, lot)</code>. Use a composite when the same
+            sku can appear on multiple lines with different configurations.</li>
+          <li><b>Per-system stable anchors</b>
+            (<code>a_anchor</code> / <code>b_anchor</code>) — each side's
+            own local primary key (e.g. <code>externalId</code> on A,
+            <code>internalId</code> on B). The ancestor stores both anchors,
+            so the policy can re-home each incoming row to its ancestor row
+            via the anchor <em>before</em> composite-identity matching
+            runs.</li>
         </ol>
+        <p class="muted">Row-level nuance: individual elements may not carry
+        an anchor value yet (e.g. a row A just created that hasn't
+        roundtripped to B). That's fine — those rows fall through to
+        composite-identity matching automatically. The rule is that the
+        <em>policy declaration</em> must name the anchor fields; missing
+        values per-row are handled gracefully.</p>
       </div>
-
-      <p><b>Which anchors do you need to declare?</b></p>
-      <table class="rule-table">
-        <thead><tr><th>Case</th><th><code>identity</code></th><th><code>a_anchor</code> / <code>b_anchor</code></th></tr></thead>
-        <tbody>
-          <tr><td>Business-identity fields never mutate</td><td>required</td><td>optional</td></tr>
-          <tr><td>Identity fields may mutate (rename uom, split a line, etc.)</td><td>required (for new rows / first sync)</td><td><b>required</b></td></tr>
-          <tr><td>First sync — no anchors in ancestor yet</td><td>required</td><td>no effect (ignored gracefully)</td></tr>
-        </tbody>
-      </table>
 
       <h3>Cross-system items — worked example</h3>
       <p>System A (external) tags rows with <code>externalId</code>, System B
@@ -121,11 +140,24 @@
 ]</pre>
       <p>Try switching <code>on_both_changed</code> to
       <code>prefer_a</code> to see B's <code>internalId</code> drop out, or
-      to <code>escalate</code> for the conflict path. Delete
-      <code>a_anchor</code> / <code>b_anchor</code> to see the anchor
-      breakdown when A renames <code>uom</code>: the old
-      <code>(SKU-100, CTN)</code> line re-appears via B and a new
-      <code>(SKU-100, BOX)</code> line is added from A with only A's ID.</p>
+      to <code>escalate</code> for the conflict path. For per-line nested
+      reconciliation (e.g. items inside a matched fulfillment), add a
+      <code>nested</code> block:</p>
+<pre>"items": {
+  "kind": "set_by_key",
+  "identity": ["sku", "uom"],
+  "a_anchor": "externalId",
+  "b_anchor": "internalId",
+  "on_both_changed": "union",
+  "nested": {
+    "subLines": {
+      "kind": "set_by_key",
+      "identity": "sku",
+      "a_anchor": "externalId",
+      "b_anchor": "internalId"
+    }
+  }
+}</pre>
 
       <h3>The pipeline stages</h3>
       <ol>
@@ -138,8 +170,10 @@
       <h3>Reading the field changelog</h3>
       <p>Below the pipeline, successful syncs produce a per-field table. Each row is one CIF field that actually changed.</p>
       <ul>
+        <li><b>Policy</b> column names the rule that governed this field (e.g. <code>owned_by(erp)</code>, <code>additive</code>, <code>set_by_key</code>). For <code>set_by_key</code> it also lists the identity fields, both anchors, and the <code>on_both_changed</code> strategy, so the row-level behaviour is explainable at a glance.</li>
         <li><b>Ancestor / System A / System B / Written</b> columns render the value as a git-style line diff vs the ancestor. Unchanged lines show dim; <span class="inline-add"><code>+ additions</code></span> are green, <span class="inline-rm"><code>- removals</code></span> are red. Multi-line values (like <code>items</code>) show each JSON field on its own row, so you can see exactly which sub-field flipped.</li>
         <li>The cell for whichever side's value ended up winning is highlighted (green left border).</li>
+        <li><b>set_by_key digest</b> — for array fields governed by <code>set_by_key</code>, the Written cell also shows a per-row status breakdown: <code>[changed-in-a]</code>, <code>[added-in-b]</code>, <code>[removed-both]</code>, etc. When a side mutated an identity field, the row is tagged with <code>(A re-homed via &lt;anchor&gt;)</code> so the anchor path is visible, not just the resulting value.</li>
         <li><b>Winner</b> column names the source: <code>&lt;system name&gt;</code>, <code>both</code>, <code>no-op</code>, or <code>derived</code>. For numeric <code>additive</code> fields, a hint underneath shows the arithmetic, e.g. <code>5 + 1 + 2</code> for <code>ancestor + (A−delta) + (B−delta) = 8</code>.</li>
       </ul>
       <p>Escalated outcomes replace the table with a conflict list color-coded by class: <code>NoPolicy</code> (gray), <code>PolicyConflict</code> (amber), <code>InvariantViolation</code> (red).</p>
@@ -150,7 +184,13 @@
         <li><b>First sync</b> — clear the Ancestor field entirely.</li>
         <li><b>NoPolicy</b> — delete <code>"price"</code> from <code>per_field</code>; both sides changed it, no rule → conflict.</li>
         <li><b>Swap owner</b> — change <code>owned_by.system</code> from <code>"erp"</code> to <code>"inv"</code>, or rename via the name inputs.</li>
-        <li><b>See the anchor rule break</b> — remove <code>a_anchor</code> / <code>b_anchor</code> from the <code>items</code> policy; A's <code>uom</code> rename now orphans the line.</li>
+        <li><b>Watch anchor re-homing</b> — the seeded sample already
+          mutates an identity field (<code>uom: CTN → BOX</code> on one
+          line). Watch the <code>items</code> row in the changelog: the
+          renamed line stays linked to its ancestor instead of showing up
+          as a remove-plus-add. Remove <code>a_anchor</code> or
+          <code>b_anchor</code> from the declaration to see the server
+          reject the payload with a validation error.</li>
         <li><b>Switch merge behavior</b> — cycle <code>on_both_changed</code> through <code>union</code> / <code>prefer_a</code> / <code>prefer_b</code> / <code>escalate</code> on the items policy and watch the Winner column change.</li>
       </ul>
     </div>
@@ -262,6 +302,7 @@
         <thead>
           <tr>
             <th>Path</th>
+            <th>Policy</th>
             <th>Ancestor (from)</th>
             <th class="sys-a">System A</th>
             <th class="sys-b">System B</th>

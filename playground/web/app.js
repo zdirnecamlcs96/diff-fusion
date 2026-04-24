@@ -50,7 +50,23 @@ const SAMPLE = {
       supplier_id: { type: "string", required: true },
       price: { type: "number", required: true },
       qty_recv: { type: "number", required: true },
-      items: { type: "array", required: false },
+      // Cross-system array: declare the element shape so the library can
+      // validate that the items `set_by_key` policy's anchor fields point
+      // to real element fields. Each anchor is tagged with the side it
+      // belongs to. Declared here, anchors become structural — the policy
+      // validator rejects the config before the first cycle if anything
+      // is misaligned.
+      items: {
+        type: "array",
+        required: false,
+        element: {
+          externalId: { type: "string", anchor: "a" },
+          internalId: { type: "string", anchor: "b" },
+          sku: { type: "string" },
+          uom: { type: "string" },
+          qty: { type: "number" },
+        },
+      },
     },
     transformations: {
       erp: {
@@ -59,7 +75,18 @@ const SAMPLE = {
         supplier_id: { source_path: "supplier._id", type: "string" },
         price: { source_path: "price", type: "number" },
         qty_recv: { source_path: "qty_recv", type: "number" },
-        items: { source_path: "lineItems", type: "array" },
+        // Element-level source mappings — A carries externalId but no
+        // internalId (that one only appears after a merge roundtrip).
+        items: {
+          source_path: "lineItems",
+          type: "array",
+          element: {
+            externalId: { source_path: "externalId", type: "string" },
+            sku: { source_path: "sku", type: "string" },
+            uom: { source_path: "uom", type: "string" },
+            qty: { source_path: "qty", type: "number" },
+          },
+        },
       },
       inv: {
         po_status: { source_path: "status", type: "string" },
@@ -67,7 +94,17 @@ const SAMPLE = {
         supplier_id: { source_path: "supplier._id", type: "string" },
         price: { source_path: "price", type: "number" },
         qty_recv: { source_path: "qty_recv", type: "number" },
-        items: { source_path: "items", type: "array" },
+        // Mirror: B carries internalId, no externalId.
+        items: {
+          source_path: "items",
+          type: "array",
+          element: {
+            internalId: { source_path: "internalId", type: "string" },
+            sku: { source_path: "sku", type: "string" },
+            uom: { source_path: "uom", type: "string" },
+            qty: { source_path: "qty", type: "number" },
+          },
+        },
       },
     },
   },
@@ -82,15 +119,19 @@ const SAMPLE = {
           { from: "open", to: "cancelled" },
         ],
       },
-      // Cross-system item merge.
-      //   identity     : composite (sku, uom) — same sku on different UOMs
-      //                  stay as distinct lines.
-      //   a_anchor     : A's stable local ID. If A mutates an identity
-      //                  field (e.g. renames uom), the row is still re-homed
-      //                  to its ancestor row via this anchor.
-      //   b_anchor     : same for B.
-      //   on_both_changed: "union" — matched rows merge fields, so both
-      //                  `externalId` and `internalId` survive on one record.
+      // Cross-system item merge. Anchors are mandatory: real integrations
+      // always have one side handing out immutable local IDs while business
+      // fields mutate, and without anchors a rename corrupts three-way diffing.
+      //   identity        : composite (sku, uom) — same sku on different UOMs
+      //                     stay as distinct lines.
+      //   a_anchor        : A's stable local ID (externalId). When A mutates
+      //                     an identity field (e.g. renames uom), the row is
+      //                     still re-homed to its ancestor via this anchor.
+      //   b_anchor        : same for B (internalId).
+      //   on_both_changed : "union" — matched rows merge fields, so both
+      //                     `externalId` and `internalId` survive on one
+      //                     record. Default is "escalate"; other modes are
+      //                     "prefer_a" / "prefer_b".
       items: {
         kind: "set_by_key",
         identity: ["sku", "uom"],
@@ -477,6 +518,149 @@ function derivationHint(anc, a, b, to) {
   return `${anc} ${sign(deltaA)} ${sign(deltaB)}`;
 }
 
+/// One-line (plus detail) summary of a policy declaration, used in the
+/// outcome table's "Policy" column. Returns a DocumentFragment with the
+/// kind highlighted and, for configurable kinds like `set_by_key`, an
+/// indented detail block listing identity/anchors/on_both_changed.
+function summarizePolicy(decl) {
+  const frag = document.createDocumentFragment();
+  if (!decl || typeof decl !== "object") {
+    frag.appendChild(makeEl("span", { className: "pol-kind pol-none", text: "(none)" }));
+    return frag;
+  }
+  const kind = decl.kind || "?";
+  frag.appendChild(makeEl("span", { className: "pol-kind", text: kind }));
+
+  const detail = document.createElement("div");
+  detail.className = "pol-detail";
+  const lines = [];
+  switch (kind) {
+    case "owned_by":
+      lines.push(`system: ${decl.system || "?"}`);
+      break;
+    case "additive":
+      break;
+    case "append":
+      break;
+    case "state_machine": {
+      const n = (decl.transitions || []).length;
+      lines.push(`${n} transition${n === 1 ? "" : "s"}`);
+      break;
+    }
+    case "set_by_key": {
+      const id = Array.isArray(decl.identity)
+        ? decl.identity.join(", ")
+        : (decl.identity || "?");
+      lines.push(`id: (${id})`);
+      lines.push(`a: ${decl.a_anchor || "?"}`);
+      lines.push(`b: ${decl.b_anchor || "?"}`);
+      if (decl.on_both_changed) lines.push(`both: ${decl.on_both_changed}`);
+      if (decl.nested && Object.keys(decl.nested).length) {
+        lines.push(`nested: ${Object.keys(decl.nested).join(", ")}`);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  for (const l of lines) {
+    const div = document.createElement("div");
+    div.textContent = l;
+    detail.appendChild(div);
+  }
+  frag.appendChild(detail);
+  return frag;
+}
+
+/// Build the composite key for one element per the policy's identity
+/// declaration. Returns a printable "sku=X / uom=Y" style label.
+function compositeKeyLabel(elem, identity) {
+  if (!elem || typeof elem !== "object") return "(non-object)";
+  const fields = Array.isArray(identity) ? identity : [identity];
+  return fields
+    .map((f) => `${f}=${elem[f] === undefined ? "∅" : JSON.stringify(elem[f])}`)
+    .join(" / ");
+}
+
+/// For a set_by_key-governed array path, compute per-element status by
+/// matching elements across ancestor / A / B / written using the declared
+/// anchors (falling back to composite identity). Returns an array of
+/// {label, status, note} entries.
+function setByKeyElementDigest(decl, anc, a, b, written) {
+  const identity = decl.identity;
+  const aAnchor = decl.a_anchor;
+  const bAnchor = decl.b_anchor;
+  const ancArr = Array.isArray(anc) ? anc : [];
+  const aArr = Array.isArray(a) ? a : [];
+  const bArr = Array.isArray(b) ? b : [];
+  const wArr = Array.isArray(written) ? written : [];
+
+  // Build ancestor anchor → composite-key maps so we can rehome rows
+  // whose identity fields mutated on one side.
+  const compKey = (elem) => compositeKeyLabel(elem, identity);
+  const ancByAAnchor = new Map();
+  const ancByBAnchor = new Map();
+  for (const e of ancArr) {
+    if (e && e[aAnchor] !== undefined) ancByAAnchor.set(String(e[aAnchor]), compKey(e));
+    if (e && e[bAnchor] !== undefined) ancByBAnchor.set(String(e[bAnchor]), compKey(e));
+  }
+
+  const keyForSide = (elem, anchorField, anchorMap) => {
+    const av = elem && elem[anchorField];
+    if (av !== undefined && anchorMap.has(String(av))) {
+      return anchorMap.get(String(av));
+    }
+    return compKey(elem);
+  };
+
+  const indexBy = (arr, keyFn) => {
+    const m = new Map();
+    arr.forEach((e, i) => m.set(keyFn(e), { elem: e, i }));
+    return m;
+  };
+  const ancIdx = indexBy(ancArr, (e) => compKey(e));
+  const aIdx = indexBy(aArr, (e) => keyForSide(e, aAnchor, ancByAAnchor));
+  const bIdx = indexBy(bArr, (e) => keyForSide(e, bAnchor, ancByBAnchor));
+  const wIdx = indexBy(wArr, (e) => compKey(e));
+
+  const allKeys = new Set([
+    ...ancIdx.keys(), ...aIdx.keys(), ...bIdx.keys(), ...wIdx.keys(),
+  ]);
+
+  const eq = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const rows = [];
+  for (const key of Array.from(allKeys).sort()) {
+    const eA = ancIdx.get(key) && ancIdx.get(key).elem;
+    const e1 = aIdx.get(key) && aIdx.get(key).elem;
+    const e2 = bIdx.get(key) && bIdx.get(key).elem;
+    const eW = wIdx.get(key) && wIdx.get(key).elem;
+
+    let status;
+    let note = "";
+    // Tag re-homing: A or B element is using the ancestor's key even
+    // though its own composite key differs (identity field mutated).
+    if (e1 && compKey(e1) !== key) note += ` (A re-homed via ${aAnchor})`;
+    if (e2 && compKey(e2) !== key) note += ` (B re-homed via ${bAnchor})`;
+
+    if (eA && e1 && e2) {
+      if (eq(e1, eA) && eq(e2, eA)) status = "unchanged";
+      else if (eq(e1, e2)) status = "same-edit";
+      else if (eq(e1, eA)) status = "changed-in-b";
+      else if (eq(e2, eA)) status = "changed-in-a";
+      else status = "changed-both";
+    } else if (eA && e1 && !e2) status = "removed-in-b";
+    else if (eA && !e1 && e2) status = "removed-in-a";
+    else if (eA && !e1 && !e2) status = "removed-both";
+    else if (!eA && e1 && e2) status = eq(e1, e2) ? "added-both" : "added-divergent";
+    else if (!eA && e1) status = "added-in-a";
+    else if (!eA && e2) status = "added-in-b";
+    else status = "?";
+
+    rows.push({ label: key, status, note, writtenMissing: !eW });
+  }
+  return rows;
+}
+
 function renderFieldChangelog(outcome) {
   const box = $("#outcome-changelog");
   const tbody = $("#fc-body");
@@ -494,11 +678,13 @@ function renderFieldChangelog(outcome) {
   const b = ctx.cif_b || {};
   const aName = ctx.system_a_name || "A";
   const bName = ctx.system_b_name || "B";
+  const policies = ctx.policy_per_field || {};
 
-  // Column headers carry the real system names.
+  // Column headers carry the real system names. Shifted by one because
+  // the Policy column now sits between Path and Ancestor.
   const head = document.querySelector("#outcome-changelog thead tr");
-  head.children[2].textContent = `System A (${aName})`;
-  head.children[3].textContent = `System B (${bName})`;
+  head.children[3].textContent = `System A (${aName})`;
+  head.children[4].textContent = `System B (${bName})`;
 
   // Union of every field path we've seen.
   const paths = new Set([
@@ -528,6 +714,13 @@ function renderFieldChangelog(outcome) {
     const tr = makeEl("tr");
     tr.appendChild(makeEl("td", { className: "path", text: path }));
 
+    // Policy column — show the declared policy kind + key args, so the
+    // reader can correlate the winner with the rule that fired.
+    const polDecl = policies[path];
+    const polTd = makeEl("td", { className: "pol-cell" });
+    polTd.appendChild(summarizePolicy(polDecl));
+    tr.appendChild(polTd);
+
     const ancText = fmtCell(ancVal);
     const aText = fmtCell(aVal);
     const bText = fmtCell(bVal);
@@ -555,6 +748,25 @@ function renderFieldChangelog(outcome) {
     // change across the sync is visible at a glance.
     const toTd = makeEl("td", { className: "val to" });
     toTd.appendChild(renderDiffCell(ancText, toText));
+
+    // For set_by_key-governed arrays, attach a per-element digest so the
+    // user sees which rows were added / changed / removed / re-homed
+    // rather than having to eyeball the JSON blob.
+    if (polDecl && polDecl.kind === "set_by_key") {
+      const digest = setByKeyElementDigest(polDecl, ancVal, aVal, bVal, toVal);
+      if (digest.length) {
+        const detail = document.createElement("div");
+        detail.className = "sbk-digest";
+        for (const r of digest) {
+          const line = document.createElement("div");
+          line.className = "sbk-row sbk-" + r.status;
+          line.textContent = `[${r.status}] ${r.label}${r.note}`;
+          detail.appendChild(line);
+        }
+        toTd.appendChild(detail);
+      }
+    }
+
     tr.appendChild(toTd);
 
     let winner = "—";
@@ -640,6 +852,7 @@ async function runSync() {
     would_write: stages.policy ? stages.policy.would_write : null,
     system_a_name: payload.system_a_name,
     system_b_name: payload.system_b_name,
+    policy_per_field: (payload.policy && payload.policy.per_field) || {},
   };
   await animate(stages, body.error);
 

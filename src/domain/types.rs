@@ -5,7 +5,22 @@
 #![allow(deprecated)]
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
+
+/// Marks a CIF element field as the stable anchor for one side of a
+/// cross-system merge. Anchors let `SetByKey` re-home a row that
+/// mutated an identity field on one side — without them, a rename looks
+/// like a remove-plus-add and corrupts three-way diffing. Every
+/// cross-system array in the CIF should declare one anchor per side.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AnchorRole {
+    /// Stable identifier assigned by System A (e.g. internal UUID).
+    A,
+    /// Stable identifier assigned by System B (e.g. NetSuite `internalId`).
+    B,
+}
 
 /// Conflict resolution strategies for fields without explicit source of truth.
 ///
@@ -126,6 +141,22 @@ pub struct CifFieldDefinition {
     /// Conflict resolution strategy when source_of_truth is not specified
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conflict_strategy: Option<ConflictStrategy>,
+
+    /// For `field_type == "array"`, declares the shape of each element.
+    /// Each entry maps an element field name to its own field definition,
+    /// which recursively supports nested arrays. When set, the transformer
+    /// walks the source array element-by-element and the `SetByKey` policy
+    /// validator checks that anchor fields are declared.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub element: Option<BTreeMap<String, CifFieldDefinition>>,
+
+    /// Marks this field as the per-side stable anchor for the row it
+    /// belongs to. Only meaningful on element fields inside an array.
+    /// Declare one `A` field and one `B` field on each cross-system
+    /// array; `SetByKey` policies targeting that array can then validate
+    /// that their `a_anchor` / `b_anchor` point to existing fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<AnchorRole>,
 }
 
 impl CifFieldDefinition {
@@ -156,7 +187,21 @@ impl CifFieldDefinition {
             default: None,
             source_of_truth: None,
             conflict_strategy: None,
+            element: None,
+            anchor: None,
         }
+    }
+
+    /// Declare the per-element shape for an array field. Chainable.
+    pub fn with_element(mut self, element: BTreeMap<String, CifFieldDefinition>) -> Self {
+        self.element = Some(element);
+        self
+    }
+
+    /// Mark this field as an anchor for the given side. Chainable.
+    pub fn with_anchor(mut self, role: AnchorRole) -> Self {
+        self.anchor = Some(role);
+        self
     }
 
     /// Make this field required (chainable)
@@ -471,6 +516,8 @@ mod tests {
             default: None,
             source_of_truth: None,
             conflict_strategy: None,
+            element: None,
+            anchor: None,
         };
         assert!(invalid.validate().is_err());
     }

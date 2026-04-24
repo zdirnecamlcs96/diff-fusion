@@ -2,9 +2,8 @@ use crate::dto::{
     ConflictDto, DiffStage, FieldDiff, OutcomeDto, PolicyStage, StageData, StagesDto,
     SyncRequest, SyncResponse,
 };
-use crate::policies::{OnBothChanged as PgOnBothChanged, SetByKeyComposite};
 use diff_fusion::adapters::test_memory::TestMemoryAdapter;
-use diff_fusion::application::policy::{MergePolicy, MergePolicyRef};
+use diff_fusion::application::policy::{MergePolicy, MergePolicyRef, OnBothChanged, SetByKey};
 use diff_fusion::compare_json;
 use diff_fusion::transform_to_cif;
 use diff_fusion::{SyncEngine, SyncOutcome};
@@ -97,6 +96,21 @@ pub async fn run(req: SyncRequest) -> SyncResponse {
     if req.ancestor.is_some() {
         builder = builder.seed_ancestor(ENTITY, ID, ancestor.clone());
     }
+
+    // Fail-fast schema check: for every policy (e.g. SetByKey) that
+    // cares about the CIF element shape, verify its anchor / identity
+    // fields are declared at `cif_schema.<path>.element`. Catches typos
+    // and missing `anchor` role markers before we waste a sync cycle.
+    let builder = match builder.validate_against_schema(&req.schema) {
+        Ok(b) => b,
+        Err(errs) => {
+            return SyncResponse::with_error(
+                format!("Schema validation failed:\n  • {}", errs.join("\n  • ")),
+                stages,
+            );
+        }
+    };
+
     let engine = builder.build();
 
     // Stage 4: policy preview (dry run).
@@ -137,11 +151,13 @@ fn diffs(a: &Value, b: &Value) -> Vec<FieldDiff> {
 /// Build a `MergePolicy` from a raw JSON declaration.
 ///
 /// Recognizes every variant of the library's `MergePolicyRef` (`owned_by`,
-/// `additive`, `append`, `state_machine`) plus the playground extension
-/// `set_by_key` for array-of-objects merging. `set_by_key` requires an
-/// `identity` field; items are matched across systems by that key, so local
-/// per-system IDs (e.g. `line_id` on A vs `line_ref` on B) don't interfere
-/// as long as both sides also carry the canonical identity field.
+/// `additive`, `append`, `state_machine`) plus `set_by_key` for
+/// array-of-objects merging. A `set_by_key` declaration requires three
+/// keys: `identity` (the composite business identity), `a_anchor`, and
+/// `b_anchor` (each side's stable local row ID). Anchors are mandatory —
+/// any realistic cross-system merge involves one system handing out
+/// immutable IDs while the business key mutates, and the library doesn't
+/// ship a way to opt out of that concern.
 fn build_policy(decl: &Value) -> Result<Box<dyn MergePolicy>, String> {
     let kind = decl
         .get("kind")
@@ -149,52 +165,69 @@ fn build_policy(decl: &Value) -> Result<Box<dyn MergePolicy>, String> {
         .ok_or_else(|| "policy missing `kind`".to_string())?;
 
     if kind == "set_by_key" {
-        // `identity` may be a single field name (string) or an ordered list
-        // of fields (array) for composite matching — e.g. `["sku", "uom"]`
-        // so the same sku on two different UOMs is treated as two lines.
-        let identity: Vec<String> = match decl.get("identity") {
-            Some(Value::String(s)) => vec![s.clone()],
-            Some(Value::Array(arr)) => arr
-                .iter()
-                .map(|v| {
-                    v.as_str()
-                        .map(str::to_string)
-                        .ok_or_else(|| "identity array entries must be strings".to_string())
-                })
-                .collect::<Result<_, _>>()?,
-            Some(other) => {
-                return Err(format!("identity must be string or array, got {other}"));
-            }
-            None => return Err("set_by_key requires `identity`".to_string()),
-        };
-        if identity.is_empty() {
-            return Err("identity cannot be empty".to_string());
-        }
-
-        let mut policy = SetByKeyComposite::new(identity);
-        if let Some(s) = decl.get("on_both_changed").and_then(Value::as_str) {
-            policy.on_both_changed = match s {
-                "union" => PgOnBothChanged::Union,
-                "prefer_a" => PgOnBothChanged::PreferA,
-                "prefer_b" => PgOnBothChanged::PreferB,
-                "escalate" => PgOnBothChanged::Escalate,
-                other => return Err(format!("unknown on_both_changed: `{other}`")),
-            };
-        }
-        // Optional stable-anchor fields. When set, each side's rows are
-        // rehomed to their original ancestor row via the anchor *before*
-        // composite-identity matching, so rows that mutated an identity
-        // field (e.g. renamed uom) still match correctly.
-        if let Some(s) = decl.get("a_anchor").and_then(Value::as_str) {
-            policy.a_anchor = Some(s.to_string());
-        }
-        if let Some(s) = decl.get("b_anchor").and_then(Value::as_str) {
-            policy.b_anchor = Some(s.to_string());
-        }
-        return Ok(Box::new(policy));
+        return Ok(Box::new(build_set_by_key(decl)?));
     }
 
     serde_json::from_value::<MergePolicyRef>(decl.clone())
         .map(|r| r.build())
         .map_err(|e| e.to_string())
+}
+
+/// Parse a `set_by_key` declaration. Split out so nested declarations
+/// (`nested: {field: {kind: set_by_key, ...}}`) can recurse without going
+/// through the `Box<dyn MergePolicy>` wrapper.
+fn build_set_by_key(decl: &Value) -> Result<SetByKey, String> {
+    let identity: Vec<String> = match decl.get("identity") {
+        Some(Value::String(s)) => vec![s.clone()],
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| "identity array entries must be strings".to_string())
+            })
+            .collect::<Result<_, _>>()?,
+        Some(other) => {
+            return Err(format!("identity must be string or array, got {other}"));
+        }
+        None => return Err("set_by_key requires `identity`".to_string()),
+    };
+    if identity.is_empty() {
+        return Err("identity cannot be empty".to_string());
+    }
+
+    let a_anchor = decl
+        .get("a_anchor")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "set_by_key requires `a_anchor`".to_string())?;
+    let b_anchor = decl
+        .get("b_anchor")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "set_by_key requires `b_anchor`".to_string())?;
+
+    let mut policy = SetByKey::new(identity, a_anchor, b_anchor);
+    if let Some(s) = decl.get("on_both_changed").and_then(Value::as_str) {
+        policy.on_both_changed = match s {
+            "union" => OnBothChanged::Union,
+            "prefer_a" => OnBothChanged::PreferA,
+            "prefer_b" => OnBothChanged::PreferB,
+            "escalate" => OnBothChanged::Escalate,
+            other => return Err(format!("unknown on_both_changed: `{other}`")),
+        };
+    }
+    // Recursive nested declarations: each value under `nested` must itself
+    // be a `set_by_key` declaration. Lets the same mechanism reconcile
+    // nested line items (e.g. fulfillment.items[], GRN.received[]) within
+    // a matched parent element rather than shallow-overwriting them.
+    if let Some(nested_decl) = decl.get("nested") {
+        let obj = nested_decl
+            .as_object()
+            .ok_or_else(|| "nested must be an object mapping field name to policy".to_string())?;
+        for (field, sub_decl) in obj {
+            let sub = build_set_by_key(sub_decl)
+                .map_err(|e| format!("nested.{field}: {e}"))?;
+            policy.nested.insert(field.clone(), sub);
+        }
+    }
+    Ok(policy)
 }

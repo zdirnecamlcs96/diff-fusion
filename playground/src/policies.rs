@@ -1,283 +1,370 @@
-//! Playground-local policies for cross-system array merging.
+//! Playground-scoped demo tests for the core `SetByKey` policy.
 //!
-//! The library ships `SetByKey` but it only takes a single identity field,
-//! picks one whole side for matched elements, and never unions their fields.
-//! Real reconciliations often need more:
-//!
-//! * **Composite identity** — same `sku` may appear on multiple lines with
-//!   different `uom`, so the true identity is `(sku, uom)`, not `sku` alone.
-//! * **Field union** — each system has its own local row ID (`externalId`
-//!   vs `internalId`); the merged element should preserve BOTH.
-//!
-//! `SetByKeyComposite` covers both: identity is an ordered list of fields,
-//! and `on_both_changed` selects how matched-but-divergent elements resolve.
+//! The composite-identity + anchor + nested variant that used to live
+//! here has been promoted into `diff_fusion::application::policy::SetByKey`
+//! (see `src/application/policy/structural.rs`). Keeping this file only
+//! for the purchase-order demo tests that the playground's UI-driven
+//! `pipeline.rs` complements.
 
-use diff_fusion::application::policy::{MergeContext, MergeOutcome, MergePolicy};
-use diff_fusion::domain::diff::FieldChange;
-use serde_json::{Map, Value};
-use std::collections::{BTreeSet, HashMap};
+#[cfg(test)]
+mod po_fulfillment_grn_demo {
+    //! Demonstrates that a single purchase-order document bundling BOTH
+    //! `deliveryFullfillment` (fulfillment) and `deliveryOrder` (GRN) arrays
+    //! can be reconciled by binding `SetByKey` to each path with its own
+    //! identity + anchor + on-conflict strategy. The orchestrator resolves
+    //! both paths within one cycle and the stale side is pushed via
+    //! `SystemPort::upsert` — adapter-returned errors (e.g. NetSuite
+    //! rejecting an over-receive) propagate as `SyncError` with the
+    //! ancestor left untouched for retry.
+    use diff_fusion::adapters::test_memory::TestMemoryAdapter;
+    use diff_fusion::application::policy::{OnBothChanged, SetByKey};
+    use diff_fusion::ports::system::SystemPort;
+    use diff_fusion::{SyncEngine, SyncOutcome};
+    use serde_json::json;
 
-#[derive(Debug, Clone, Copy)]
-pub enum OnBothChanged {
-    /// Shallow-union the two elements' fields. A-side wins on direct field
-    /// clashes by default; swap via `prefer_a_on_field_conflict`.
-    Union,
-    PreferA,
-    PreferB,
-    Escalate,
-}
+    const ENTITY: &str = "purchase_order";
+    const ID: &str = "PO-1";
 
-#[derive(Debug, Clone)]
-pub struct SetByKeyComposite {
-    /// Composite identity built from the canonical business fields
-    /// (e.g. `["sku", "uom"]`). Used when no anchor match is found.
-    pub identity: Vec<String>,
-    /// Optional stable anchor field carried by every A-side element and by
-    /// every ancestor element. When set, A-side rows are re-homed to their
-    /// ancestor row via this anchor *before* composite-identity matching —
-    /// so if A renames a business field that is part of `identity` (e.g.
-    /// changes `uom` from CTN to BOX), the row still matches its old self.
-    pub a_anchor: Option<String>,
-    /// Same as `a_anchor` but for B-side rows.
-    pub b_anchor: Option<String>,
-    pub on_both_changed: OnBothChanged,
-    pub prefer_a_on_field_conflict: bool,
-}
-
-impl SetByKeyComposite {
-    pub fn new(identity: Vec<String>) -> Self {
-        Self {
-            identity,
-            a_anchor: None,
-            b_anchor: None,
-            on_both_changed: OnBothChanged::Union,
-            prefer_a_on_field_conflict: true,
-        }
-    }
-}
-
-impl MergePolicy for SetByKeyComposite {
-    fn name(&self) -> &'static str {
-        "set_by_key_composite"
+    /// Fulfillment policy: identity by (lineId), each side has its own
+    /// stable local ID field, union on both-sides edits.
+    fn fulfillment_policy() -> SetByKey {
+        let mut p = SetByKey::new(
+            vec!["lineId".into()],
+            "internalFulfillmentId",
+            "nsFulfillmentId",
+        );
+        p.on_both_changed = OnBothChanged::Union;
+        p
     }
 
-    fn merge(&self, change: &FieldChange, _ctx: &MergeContext) -> MergeOutcome {
-        let anc = match change.old_value.as_array() {
-            Some(a) => a,
-            None => return conflict("ancestor is not an array"),
-        };
-        let a = match change.new_from_a.as_ref() {
-            Some(v) => match v.as_array() {
-                Some(arr) => arr,
-                None => return conflict("A-side value is not an array"),
-            },
-            None => anc,
-        };
-        let b = match change.new_from_b.as_ref() {
-            Some(v) => match v.as_array() {
-                Some(arr) => arr,
-                None => return conflict("B-side value is not an array"),
-            },
-            None => anc,
-        };
+    /// GRN policy: identity by (grnId), union by default so compatible
+    /// enrichments merge cleanly. Per-test overrides flip to Escalate
+    /// when we need to verify the over-receive case.
+    fn grn_policy_union() -> SetByKey {
+        let mut p = SetByKey::new(vec!["grnId".into()], "internalGrnId", "nsGrnId");
+        p.on_both_changed = OnBothChanged::Union;
+        p
+    }
 
-        let idx_anc = match index_by(anc, &self.identity) {
-            Ok(m) => m,
-            Err(e) => return e,
-        };
+    fn grn_policy_escalate() -> SetByKey {
+        let mut p = SetByKey::new(vec!["grnId".into()], "internalGrnId", "nsGrnId");
+        p.on_both_changed = OnBothChanged::Escalate;
+        p
+    }
 
-        // Build anchor lookups on the ancestor so each side's rows can be
-        // re-homed to their original ancestor key even if the row has
-        // mutated one of the identity fields.
-        let anc_by_a_anchor = build_anchor_index(anc, self.a_anchor.as_deref(), &self.identity);
-        let anc_by_b_anchor = build_anchor_index(anc, self.b_anchor.as_deref(), &self.identity);
+    #[tokio::test]
+    async fn fulfillment_and_grn_changes_flow_in_one_cycle() {
+        // A (internal) adds a second fulfillment line.
+        // B (netsuite) enriches the existing GRN line with a NetSuite ref.
+        // One cycle should converge both sides.
+        let a = TestMemoryAdapter::new("internal");
+        let b = TestMemoryAdapter::new("netsuite");
 
-        let idx_a = match index_with_anchor(
-            a,
-            &self.identity,
-            self.a_anchor.as_deref(),
-            &anc_by_a_anchor,
-        ) {
-            Ok(m) => m,
-            Err(e) => return e,
-        };
-        let idx_b = match index_with_anchor(
-            b,
-            &self.identity,
-            self.b_anchor.as_deref(),
-            &anc_by_b_anchor,
-        ) {
-            Ok(m) => m,
-            Err(e) => return e,
-        };
-
-        let keys: BTreeSet<&String> = idx_anc
-            .keys()
-            .chain(idx_a.keys())
-            .chain(idx_b.keys())
-            .collect();
-
-        let mut out = Vec::new();
-        for key in keys {
-            let in_anc = idx_anc.get(key).map(|&i| &anc[i]);
-            let in_a = idx_a.get(key).map(|&i| &a[i]);
-            let in_b = idx_b.get(key).map(|&i| &b[i]);
-
-            match (in_anc, in_a, in_b) {
-                (_, Some(ea), Some(eb)) if ea == eb => out.push(ea.clone()),
-                (_, Some(ea), Some(eb)) => match self.on_both_changed {
-                    OnBothChanged::Union => {
-                        out.push(self.union_elements(in_anc, ea, eb));
-                    }
-                    OnBothChanged::PreferA => out.push(ea.clone()),
-                    OnBothChanged::PreferB => out.push(eb.clone()),
-                    OnBothChanged::Escalate => {
-                        return MergeOutcome::Conflict {
-                            reason: format!("element `{key}` changed on both sides"),
-                        };
-                    }
-                },
-                (_, Some(ea), None) => out.push(ea.clone()),
-                (_, None, Some(eb)) => out.push(eb.clone()),
-                (Some(_), None, None) => { /* removed on both */ }
-                (None, None, None) => unreachable!("key absent everywhere"),
-            }
-        }
-
-        // Stable order: ancestor first, then new elements at the end.
-        let identity = self.identity.clone();
-        out.sort_by_key(move |elem| {
-            composite_key(elem, &identity)
-                .ok()
-                .and_then(|k| {
-                    anc.iter()
-                        .position(|a| composite_key(a, &identity).ok() == Some(k.clone()))
-                })
-                .unwrap_or(usize::MAX)
+        let ancestor = json!({
+            "deliveryFullfillment": [
+                {"lineId": "F1", "internalFulfillmentId": "IF1", "nsFulfillmentId": "NS-F1", "items": 3}
+            ],
+            "deliveryOrder": [
+                {"grnId": "G1", "internalGrnId": "IG1", "nsGrnId": "NS-G1", "fullfillmentId": "F1", "receivedQty": 3}
+            ]
         });
 
-        MergeOutcome::Resolved(Value::Array(out))
-    }
-}
+        a.seed(
+            ENTITY,
+            ID,
+            json!({
+                "deliveryFullfillment": [
+                    {"lineId": "F1", "internalFulfillmentId": "IF1", "nsFulfillmentId": "NS-F1", "items": 3},
+                    {"lineId": "F2", "internalFulfillmentId": "IF2", "items": 2}
+                ],
+                "deliveryOrder": [
+                    {"grnId": "G1", "internalGrnId": "IG1", "nsGrnId": "NS-G1", "fullfillmentId": "F1", "receivedQty": 3}
+                ]
+            }),
+        );
 
-impl SetByKeyComposite {
-    fn union_elements(&self, anc: Option<&Value>, a: &Value, b: &Value) -> Value {
-        let mut out: Map<String, Value> = Map::new();
-        if let Some(o) = anc.and_then(Value::as_object) {
-            for (k, v) in o {
-                out.insert(k.clone(), v.clone());
-            }
+        b.seed(
+            ENTITY,
+            ID,
+            json!({
+                "deliveryFullfillment": [
+                    {"lineId": "F1", "internalFulfillmentId": "IF1", "nsFulfillmentId": "NS-F1", "items": 3}
+                ],
+                "deliveryOrder": [
+                    {"grnId": "G1", "internalGrnId": "IG1", "nsGrnId": "NS-G1", "fullfillmentId": "F1", "receivedQty": 3, "netSuiteRef": "GRN-001"}
+                ]
+            }),
+        );
+
+        let engine = SyncEngine::builder(a.clone(), b.clone())
+            .policy("deliveryFullfillment", Box::new(fulfillment_policy()))
+            .policy("deliveryOrder", Box::new(grn_policy_union()))
+            .seed_ancestor(ENTITY, ID, ancestor)
+            .build();
+
+        let outcome = engine.sync(ENTITY, ID).await.expect("sync ok");
+        assert!(
+            matches!(outcome, SyncOutcome::Synced { .. }),
+            "expected Synced, got {outcome:?}"
+        );
+
+        for (port, label) in [(&a, "internal"), (&b, "netsuite")] {
+            let ext = port
+                .find_by_canonical_id(ENTITY, ID)
+                .await
+                .unwrap()
+                .unwrap();
+            let (val, _) = port.fetch(ENTITY, &ext).await.unwrap();
+
+            let fulfillments = val["deliveryFullfillment"].as_array().unwrap();
+            let fids: Vec<&str> = fulfillments
+                .iter()
+                .map(|f| f["lineId"].as_str().unwrap())
+                .collect();
+            assert!(
+                fids.contains(&"F1") && fids.contains(&"F2"),
+                "{label}: missing fulfillment lines, got {fids:?}"
+            );
+
+            let grns = val["deliveryOrder"].as_array().unwrap();
+            assert_eq!(grns.len(), 1, "{label}: GRN count");
+            assert_eq!(
+                grns[0]["netSuiteRef"],
+                json!("GRN-001"),
+                "{label}: should carry NetSuite ref from B"
+            );
         }
-        let (loser, winner) = if self.prefer_a_on_field_conflict {
-            (b, a)
-        } else {
-            (a, b)
-        };
-        if let Some(o) = loser.as_object() {
-            for (k, v) in o {
-                out.insert(k.clone(), v.clone());
+        assert_eq!(engine.escalation_depth(), 0);
+    }
+
+    #[tokio::test]
+    async fn conflicting_grn_quantities_escalate_without_pushing() {
+        // Both sides changed receivedQty for the same GRN line to different
+        // values (the "over-receive disagreement" case). Escalate blocks
+        // the push; ancestor stays put; sides keep their divergent state.
+        let a = TestMemoryAdapter::new("internal");
+        let b = TestMemoryAdapter::new("netsuite");
+
+        let ancestor = json!({
+            "deliveryFullfillment": [
+                {"lineId": "F1", "internalFulfillmentId": "IF1", "nsFulfillmentId": "NS-F1", "items": 3}
+            ],
+            "deliveryOrder": [
+                {"grnId": "G1", "internalGrnId": "IG1", "nsGrnId": "NS-G1", "receivedQty": 3}
+            ]
+        });
+
+        a.seed(
+            ENTITY,
+            ID,
+            json!({
+                "deliveryFullfillment": [
+                    {"lineId": "F1", "internalFulfillmentId": "IF1", "nsFulfillmentId": "NS-F1", "items": 3}
+                ],
+                "deliveryOrder": [
+                    {"grnId": "G1", "internalGrnId": "IG1", "nsGrnId": "NS-G1", "receivedQty": 5}
+                ]
+            }),
+        );
+        b.seed(
+            ENTITY,
+            ID,
+            json!({
+                "deliveryFullfillment": [
+                    {"lineId": "F1", "internalFulfillmentId": "IF1", "nsFulfillmentId": "NS-F1", "items": 3}
+                ],
+                "deliveryOrder": [
+                    {"grnId": "G1", "internalGrnId": "IG1", "nsGrnId": "NS-G1", "receivedQty": 4}
+                ]
+            }),
+        );
+
+        let engine = SyncEngine::builder(a.clone(), b.clone())
+            .policy("deliveryFullfillment", Box::new(fulfillment_policy()))
+            .policy("deliveryOrder", Box::new(grn_policy_escalate()))
+            .seed_ancestor(ENTITY, ID, ancestor)
+            .build();
+
+        let outcome = engine.sync(ENTITY, ID).await.expect("sync ok");
+        match outcome {
+            SyncOutcome::Escalated { conflicts } => {
+                assert_eq!(conflicts.len(), 1);
+                assert_eq!(conflicts[0].path, "deliveryOrder");
             }
+            other => panic!("expected Escalated, got {other:?}"),
         }
-        if let Some(o) = winner.as_object() {
-            for (k, v) in o {
-                out.insert(k.clone(), v.clone());
-            }
+
+        let (a_view, _) = a
+            .fetch(
+                ENTITY,
+                &a.find_by_canonical_id(ENTITY, ID).await.unwrap().unwrap(),
+            )
+            .await
+            .unwrap();
+        let (b_view, _) = b
+            .fetch(
+                ENTITY,
+                &b.find_by_canonical_id(ENTITY, ID).await.unwrap().unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(a_view["deliveryOrder"][0]["receivedQty"], json!(5));
+        assert_eq!(b_view["deliveryOrder"][0]["receivedQty"], json!(4));
+        assert_eq!(engine.escalation_depth(), 1);
+    }
+
+    #[tokio::test]
+    async fn nested_items_inside_fulfillment_and_grn_merge_independently() {
+        // deliveryFullfillment[*].items[] and deliveryOrder[*].received[]
+        // are nested arrays. Both sides edit line items inside the same
+        // parent. The outer policy recursively delegates to a nested
+        // SetByKey for each named sub-array, so per-line detail is
+        // preserved rather than flattened.
+        let a = TestMemoryAdapter::new("internal");
+        let b = TestMemoryAdapter::new("netsuite");
+
+        let ancestor = json!({
+            "deliveryFullfillment": [
+                {
+                    "lineId": "F1",
+                    "internalFulfillmentId": "IF1",
+                    "nsFulfillmentId": "NS-F1",
+                    "items": [
+                        {"sku": "SKU-A", "amount": 3}
+                    ]
+                }
+            ],
+            "deliveryOrder": [
+                {
+                    "grnId": "G1",
+                    "internalGrnId": "IG1",
+                    "nsGrnId": "NS-G1",
+                    "fullfillmentId": "F1",
+                    "received": [
+                        {"sku": "SKU-A", "amount": 3}
+                    ]
+                }
+            ]
+        });
+
+        a.seed(
+            ENTITY,
+            ID,
+            json!({
+                "deliveryFullfillment": [
+                    {
+                        "lineId": "F1",
+                        "internalFulfillmentId": "IF1",
+                        "nsFulfillmentId": "NS-F1",
+                        "items": [
+                            {"sku": "SKU-A", "amount": 3},
+                            {"sku": "SKU-B", "amount": 1}
+                        ]
+                    }
+                ],
+                "deliveryOrder": [
+                    {
+                        "grnId": "G1",
+                        "internalGrnId": "IG1",
+                        "nsGrnId": "NS-G1",
+                        "fullfillmentId": "F1",
+                        "received": [
+                            {"sku": "SKU-A", "amount": 3, "cost": 50}
+                        ]
+                    }
+                ]
+            }),
+        );
+
+        b.seed(
+            ENTITY,
+            ID,
+            json!({
+                "deliveryFullfillment": [
+                    {
+                        "lineId": "F1",
+                        "internalFulfillmentId": "IF1",
+                        "nsFulfillmentId": "NS-F1",
+                        "items": [
+                            {"sku": "SKU-A", "amount": 3},
+                            {"sku": "SKU-C", "amount": 2}
+                        ]
+                    }
+                ],
+                "deliveryOrder": [
+                    {
+                        "grnId": "G1",
+                        "internalGrnId": "IG1",
+                        "nsGrnId": "NS-G1",
+                        "fullfillmentId": "F1",
+                        "received": [
+                            {"sku": "SKU-A", "amount": 3, "cost": 50},
+                            {"sku": "SKU-B", "amount": 1}
+                        ]
+                    }
+                ]
+            }),
+        );
+
+        let items_policy = SetByKey::new(vec!["sku".into()], "sku", "sku");
+        let received_policy = SetByKey::new(vec!["sku".into()], "sku", "sku");
+
+        let mut fulfillment_with_nested = fulfillment_policy();
+        fulfillment_with_nested
+            .nested
+            .insert("items".into(), items_policy);
+        let mut grn_with_nested = grn_policy_union();
+        grn_with_nested
+            .nested
+            .insert("received".into(), received_policy);
+
+        let engine = SyncEngine::builder(a.clone(), b.clone())
+            .policy("deliveryFullfillment", Box::new(fulfillment_with_nested))
+            .policy("deliveryOrder", Box::new(grn_with_nested))
+            .seed_ancestor(ENTITY, ID, ancestor)
+            .build();
+
+        let outcome = engine.sync(ENTITY, ID).await.expect("sync ok");
+        assert!(
+            matches!(outcome, SyncOutcome::Synced { .. }),
+            "expected Synced, got {outcome:?}"
+        );
+
+        for (port, label) in [(&a, "internal"), (&b, "netsuite")] {
+            let ext = port
+                .find_by_canonical_id(ENTITY, ID)
+                .await
+                .unwrap()
+                .unwrap();
+            let (val, _) = port.fetch(ENTITY, &ext).await.unwrap();
+
+            let items = val["deliveryFullfillment"][0]["items"].as_array().unwrap();
+            let skus: Vec<&str> = items.iter().map(|i| i["sku"].as_str().unwrap()).collect();
+            assert!(
+                skus.contains(&"SKU-A") && skus.contains(&"SKU-B") && skus.contains(&"SKU-C"),
+                "{label}: fulfillment items should contain A, B, C — got {skus:?}"
+            );
+
+            let received = val["deliveryOrder"][0]["received"].as_array().unwrap();
+            let r_skus: Vec<&str> = received
+                .iter()
+                .map(|i| i["sku"].as_str().unwrap())
+                .collect();
+            assert!(
+                r_skus.contains(&"SKU-A") && r_skus.contains(&"SKU-B"),
+                "{label}: received items should contain A and B — got {r_skus:?}"
+            );
+            let sku_a_cost = received
+                .iter()
+                .find(|r| r["sku"] == "SKU-A")
+                .and_then(|r| r.get("cost"))
+                .cloned();
+            assert_eq!(
+                sku_a_cost,
+                Some(json!(50)),
+                "{label}: SKU-A cost should survive nested merge"
+            );
         }
-        Value::Object(out)
-    }
-}
-
-/// Build the composite key for one element by joining each identity field's
-/// stringified value with a unit-separator that won't appear in normal input.
-fn composite_key(elem: &Value, identity: &[String]) -> Result<String, MergeOutcome> {
-    let mut parts = Vec::with_capacity(identity.len());
-    for field in identity {
-        match elem.get(field) {
-            Some(Value::String(s)) => parts.push(s.clone()),
-            Some(Value::Number(n)) => parts.push(n.to_string()),
-            Some(Value::Bool(b)) => parts.push(b.to_string()),
-            Some(v) => parts.push(v.to_string()),
-            None => {
-                return Err(conflict(&format!(
-                    "element missing identity field `{field}`"
-                )));
-            }
-        }
-    }
-    Ok(parts.join("\u{1f}"))
-}
-
-fn index_by(arr: &[Value], identity: &[String]) -> Result<HashMap<String, usize>, MergeOutcome> {
-    let mut out = HashMap::new();
-    for (i, elem) in arr.iter().enumerate() {
-        let key = composite_key(elem, identity)?;
-        out.insert(key, i);
-    }
-    Ok(out)
-}
-
-/// Map an ancestor's anchor field value → the ancestor's composite-identity
-/// key. Returns an empty map when no anchor is configured or the ancestor
-/// predates anchor tracking.
-fn build_anchor_index(
-    anc: &[Value],
-    anchor: Option<&str>,
-    identity: &[String],
-) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    let Some(field) = anchor else {
-        return map;
-    };
-    for elem in anc {
-        let Some(anchor_val) = elem.get(field).and_then(anchor_to_string) else {
-            continue;
-        };
-        let Ok(key) = composite_key(elem, identity) else {
-            continue;
-        };
-        map.insert(anchor_val, key);
-    }
-    map
-}
-
-/// Index `side` rows by composite identity, but first try to re-home each
-/// row to an ancestor key via the anchor field. This is what lets the merge
-/// survive mutation of identity fields on one side.
-fn index_with_anchor(
-    side: &[Value],
-    identity: &[String],
-    anchor: Option<&str>,
-    anc_anchor_map: &HashMap<String, String>,
-) -> Result<HashMap<String, usize>, MergeOutcome> {
-    let mut out = HashMap::new();
-    for (i, elem) in side.iter().enumerate() {
-        let key = if let Some(field) = anchor {
-            if let Some(anchor_val) = elem.get(field).and_then(anchor_to_string) {
-                anc_anchor_map
-                    .get(&anchor_val)
-                    .cloned()
-                    .unwrap_or_else(|| composite_key(elem, identity).unwrap_or_default())
-            } else {
-                composite_key(elem, identity)?
-            }
-        } else {
-            composite_key(elem, identity)?
-        };
-        out.insert(key, i);
-    }
-    Ok(out)
-}
-
-fn anchor_to_string(v: &Value) -> Option<String> {
-    match v {
-        Value::String(s) => Some(s.clone()),
-        Value::Number(n) => Some(n.to_string()),
-        _ => None,
-    }
-}
-
-fn conflict(reason: &str) -> MergeOutcome {
-    MergeOutcome::Conflict {
-        reason: reason.to_string(),
+        assert_eq!(engine.escalation_depth(), 0);
     }
 }
