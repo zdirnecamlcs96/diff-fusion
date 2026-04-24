@@ -217,6 +217,83 @@ button.secondary:hover {
   margin: 6px 0 12px;
 }
 
+/* Prominent rule box used inside the guide */
+.rule-callout {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-left: 4px solid var(--warn);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 12px 0 16px;
+}
+.rule-callout p { margin: 6px 0; }
+.rule-callout ol { padding-left: 22px; margin: 6px 0; }
+.rule-callout strong { color: var(--warn); }
+
+.rule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 6px 0 14px;
+  background: var(--panel-alt);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.rule-table th, .rule-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.rule-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--panel);
+  font-weight: 600;
+}
+.rule-table tr:last-child td { border-bottom: none; }
+.rule-table code { font-size: 11px; }
+
+/* ========== Changelog ========== */
+.changelog-entry {
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel-alt);
+  border-radius: 0 6px 6px 0;
+  margin: 12px 0;
+}
+.changelog-entry + .changelog-entry { border-left-color: var(--border); }
+.changelog-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.changelog-head .version {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+.changelog-head time {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.changelog-entry ul { margin: 2px 0 0; padding-left: 20px; }
+.changelog-entry li { font-size: 12px; margin: 3px 0; }
+.changelog-entry kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
 /* ========== Pipeline ========== */
 .stages {
   display: flex;
@@ -444,6 +521,132 @@ button.secondary:hover {
   max-height: 320px;
   margin: 0;
 }
+
+/* Field-level change log */
+.field-changelog { margin-top: 16px; }
+.field-changelog h3 small {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  opacity: 0.8;
+  margin-left: 6px;
+}
+.fc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: var(--mono);
+  background: var(--panel-alt);
+  border-radius: 6px;
+  overflow: hidden;
+  table-layout: fixed;
+}
+.fc-table thead th {
+  background: var(--panel);
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+/* Column widths: narrow path + winner, wider value columns share the rest. */
+.fc-table th:nth-child(1) { width: 12%; }   /* path */
+.fc-table th:nth-child(2),
+.fc-table th:nth-child(3),
+.fc-table th:nth-child(4),
+.fc-table th:nth-child(5) { width: 20%; }   /* four value columns */
+.fc-table th:nth-child(6) { width: 8%; }    /* winner */
+
+.fc-table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  /* Wrap on whitespace/newlines (pretty-printed JSON) and on safe points
+     in long tokens — without breaking IDs like "A-L1" mid-string. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  font-size: 11px;
+  line-height: 1.4;
+  max-height: 260px;
+  overflow: auto;
+}
+.fc-table tbody tr:last-child td { border-bottom: none; }
+.fc-table td.path {
+  color: var(--accent-strong);
+  font-weight: 600;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc-table td.val { color: var(--text); }
+.fc-table td.from { color: var(--muted); }
+.fc-table td.to {
+  color: var(--ok);
+  font-weight: 600;
+}
+.fc-table td.winner {
+  background: rgba(74, 222, 128, 0.08);
+  border-left: 2px solid var(--ok);
+  color: var(--ok);
+}
+.fc-table td.winner-cell {
+  font-size: 11px;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.winner-hint {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.fc-table td.winner-no-op { color: var(--muted); }
+.fc-table td.winner-derived { color: var(--warn); }
+.fc-table td.winner-both { color: var(--accent-strong); }
+
+/* Git-style line diff inside value cells */
+.diff-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-prefix {
+  flex: 0 0 auto;
+  color: var(--muted);
+  opacity: 0.7;
+  user-select: none;
+  font-weight: 600;
+}
+.diff-body { flex: 1 1 auto; }
+.diff-add {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--ok);
+}
+.diff-add .diff-prefix { color: var(--ok); opacity: 1; }
+.diff-rm {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--err);
+}
+.diff-rm .diff-prefix { color: var(--err); opacity: 1; }
+.diff-ctx {
+  color: var(--muted);
+}
+
+/* Inline color swatches used in the in-page guide prose */
+.inline-add code { color: var(--ok); }
+.inline-rm code  { color: var(--err); }
 
 @media (max-width: 900px) {
   .input-grid { grid-template-columns: 1fr; }

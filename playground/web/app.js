@@ -10,23 +10,38 @@ const STEP_MS = 500;
 const SAMPLE = {
   system_a_name: "erp",
   system_b_name: "inv",
+  // System A (erp, external) — each row carries `externalId` as its stable
+  // per-system primary key. Here A has:
+  //   • bumped qty on the (SKU-100, BTL) line
+  //   • RENAMED uom of the second line from "CTN" to "BOX" — an identity
+  //     field has mutated. Without the stable anchor, this would look like
+  //     "one line removed, one added" to the merger.
+  //   • added a brand-new (SKU-300, BTL) line
   system_a: {
     status: "closed",
     seqNumber: 42,
-    version: "2",
-    supplier: { _id: "sup-1", name: "Acme Co.", internal: "warehouse" },
-    netSuite: { id: "NS-101", refNo: "ZPS-1" },
+    supplier: { _id: "sup-1", name: "Acme Co." },
     price: 120,
     qty_recv: 6,
+    lineItems: [
+      { externalId: "A-L1", sku: "SKU-100", uom: "BTL", qty: 12 },
+      { externalId: "A-L2", sku: "SKU-100", uom: "BOX", qty: 2 },
+      { externalId: "A-L9", sku: "SKU-300", uom: "BTL", qty: 3 },
+    ],
   },
+  // System B (internal) — each row carries its stable `internalId`. B has
+  // not touched the items, but the policy still needs to match B's rows to
+  // the ancestor via `internalId`.
   system_b: {
     status: "closed",
     seqNumber: 42,
-    version: "2",
-    supplier: { _id: "sup-1", name: "Acme Co.", internal: "warehouse" },
-    netSuite: { id: "NS-101", refNo: "ZPS-1" },
+    supplier: { _id: "sup-1", name: "Acme Co." },
     price: 999,
     qty_recv: 7,
+    items: [
+      { internalId: "B-I1", sku: "SKU-100", uom: "BTL", qty: 10 },
+      { internalId: "B-I2", sku: "SKU-100", uom: "CTN", qty: 2 },
+    ],
   },
   schema: {
     cif_schema: {
@@ -35,6 +50,7 @@ const SAMPLE = {
       supplier_id: { type: "string", required: true },
       price: { type: "number", required: true },
       qty_recv: { type: "number", required: true },
+      items: { type: "array", required: false },
     },
     transformations: {
       erp: {
@@ -43,6 +59,7 @@ const SAMPLE = {
         supplier_id: { source_path: "supplier._id", type: "string" },
         price: { source_path: "price", type: "number" },
         qty_recv: { source_path: "qty_recv", type: "number" },
+        items: { source_path: "lineItems", type: "array" },
       },
       inv: {
         po_status: { source_path: "status", type: "string" },
@@ -50,6 +67,7 @@ const SAMPLE = {
         supplier_id: { source_path: "supplier._id", type: "string" },
         price: { source_path: "price", type: "number" },
         qty_recv: { source_path: "qty_recv", type: "number" },
+        items: { source_path: "items", type: "array" },
       },
     },
   },
@@ -64,14 +82,44 @@ const SAMPLE = {
           { from: "open", to: "cancelled" },
         ],
       },
+      // Cross-system item merge.
+      //   identity     : composite (sku, uom) — same sku on different UOMs
+      //                  stay as distinct lines.
+      //   a_anchor     : A's stable local ID. If A mutates an identity
+      //                  field (e.g. renames uom), the row is still re-homed
+      //                  to its ancestor row via this anchor.
+      //   b_anchor     : same for B.
+      //   on_both_changed: "union" — matched rows merge fields, so both
+      //                  `externalId` and `internalId` survive on one record.
+      items: {
+        kind: "set_by_key",
+        identity: ["sku", "uom"],
+        a_anchor: "externalId",
+        b_anchor: "internalId",
+        on_both_changed: "union",
+      },
     },
   },
+  // Ancestor represents the last-synced canonical state. Crucially, it
+  // carries BOTH `externalId` and `internalId` for every line — that is the
+  // cross-system ID map the anchor-based matcher reads. Without these, a
+  // uom rename on either side would look like a remove+add.
   ancestor: {
     po_status: "open",
     po_seq_number: 42,
     supplier_id: "sup-1",
     price: 100,
     qty_recv: 5,
+    items: [
+      {
+        sku: "SKU-100", uom: "BTL", qty: 10,
+        externalId: "A-L1", internalId: "B-I1",
+      },
+      {
+        sku: "SKU-100", uom: "CTN", qty: 2,
+        externalId: "A-L2", internalId: "B-I2",
+      },
+    ],
   },
 };
 
@@ -118,6 +166,8 @@ function resetStages() {
   detail.hidden = true;
   $("#outcome-conflicts").hidden = true;
   $("#outcome-merged").hidden = true;
+  $("#outcome-changelog").hidden = true;
+  $("#fc-body").textContent = "";
 }
 
 function setStatus(msg, tone = "") {
@@ -302,6 +352,240 @@ function renderOutcomeDetail(outcome) {
   } else {
     mergedBox.hidden = true;
   }
+
+  // Field changelog — per-field from→to record (only when we actually wrote).
+  renderFieldChangelog(outcome);
+}
+
+function fmtCell(v) {
+  if (v === undefined) return "—";
+  if (v === null) return "null";
+  if (typeof v === "string") return JSON.stringify(v);
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  // Arrays / objects — pretty-print multi-line so the cell can wrap on the
+  // structural newlines instead of getting squeezed into one huge blob.
+  return JSON.stringify(v, null, 2);
+}
+
+/// Line-level diff (LCS) between two multi-line strings. Returns an array of
+/// { type: "ctx" | "add" | "rm", text: "..." } entries that a renderer can
+/// turn into git-style colored lines.
+function lineDiff(fromStr, toStr) {
+  const from = (fromStr === "—" || fromStr == null ? "" : String(fromStr)).split("\n");
+  const to   = (toStr   === "—" || toStr   == null ? "" : String(toStr)  ).split("\n");
+  const m = from.length, n = to.length;
+  // LCS length table.
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = from[i] === to[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const out = [];
+  let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (from[i] === to[j]) { out.push({ type: "ctx", text: to[j] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ type: "rm", text: from[i] }); i++; }
+    else { out.push({ type: "add", text: to[j] }); j++; }
+  }
+  while (i < m) out.push({ type: "rm", text: from[i++] });
+  while (j < n) out.push({ type: "add", text: to[j++] });
+  return out;
+}
+
+/// Render a table cell as a git-style diff against `fromText`. Used for A, B,
+/// and Written columns. Returns a fragment of <span class="diff-line"> nodes.
+function renderDiffCell(fromText, toText) {
+  const frag = document.createDocumentFragment();
+  const diff = lineDiff(fromText, toText);
+  // If there are no actual changes, just render the value plain.
+  const anyDelta = diff.some((d) => d.type !== "ctx");
+  if (!anyDelta) {
+    frag.appendChild(document.createTextNode(toText));
+    return frag;
+  }
+  for (const entry of diff) {
+    // Skip pure removal lines — they belong to the ancestor's column; the
+    // target cell only shows context + additions. This keeps each column's
+    // content aligned with its own value while still color-marking deltas.
+    if (entry.type === "rm") continue;
+    const line = document.createElement("div");
+    line.className = "diff-line diff-" + entry.type;
+    const prefix = document.createElement("span");
+    prefix.className = "diff-prefix";
+    prefix.textContent = entry.type === "add" ? "+ " : "  ";
+    const body = document.createElement("span");
+    body.className = "diff-body";
+    body.textContent = entry.text;
+    line.appendChild(prefix);
+    line.appendChild(body);
+    frag.appendChild(line);
+  }
+  return frag;
+}
+
+/// Render an ancestor cell as a git-style diff where lines REMOVED (present
+/// in ancestor but not in `toText`) are marked with `-`. Used on the
+/// Ancestor column so removed fields stand out visually.
+function renderAncestorDiffCell(ancestorText, writtenText) {
+  const frag = document.createDocumentFragment();
+  const diff = lineDiff(ancestorText, writtenText);
+  const anyDelta = diff.some((d) => d.type !== "ctx");
+  if (!anyDelta) {
+    frag.appendChild(document.createTextNode(ancestorText));
+    return frag;
+  }
+  for (const entry of diff) {
+    if (entry.type === "add") continue;
+    const line = document.createElement("div");
+    line.className = "diff-line diff-" + (entry.type === "rm" ? "rm" : "ctx");
+    const prefix = document.createElement("span");
+    prefix.className = "diff-prefix";
+    prefix.textContent = entry.type === "rm" ? "- " : "  ";
+    const body = document.createElement("span");
+    body.className = "diff-body";
+    body.textContent = entry.text;
+    line.appendChild(prefix);
+    line.appendChild(body);
+    frag.appendChild(line);
+  }
+  return frag;
+}
+
+function stableEq(a, b) {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/// When a scalar-number field resolved to the additive CRDT formula
+/// `ancestor + (A - ancestor) + (B - ancestor)`, return a compact breakdown
+/// string (e.g. `"5 + 1 + 2"`) to show alongside the "derived" winner label.
+/// Returns null when the pattern doesn't apply.
+function derivationHint(anc, a, b, to) {
+  const allNumeric = [anc, a, b, to].every((v) => typeof v === "number" && Number.isFinite(v));
+  if (!allNumeric) return null;
+  const deltaA = a - anc;
+  const deltaB = b - anc;
+  const expected = anc + deltaA + deltaB;
+  if (Math.abs(expected - to) > 1e-9) return null;
+  // Skip the trivial "no-op" degenerate.
+  if (deltaA === 0 && deltaB === 0) return null;
+  const sign = (n) => (n >= 0 ? "+ " : "- ") + Math.abs(n);
+  return `${anc} ${sign(deltaA)} ${sign(deltaB)}`;
+}
+
+function renderFieldChangelog(outcome) {
+  const box = $("#outcome-changelog");
+  const tbody = $("#fc-body");
+  tbody.textContent = "";
+
+  const ctx = window.__lastContext || {};
+  const written = ctx.would_write;
+  if (outcome.kind !== "Synced" || !written) {
+    box.hidden = true;
+    return;
+  }
+
+  const ancestor = ctx.ancestor || {};
+  const a = ctx.cif_a || {};
+  const b = ctx.cif_b || {};
+  const aName = ctx.system_a_name || "A";
+  const bName = ctx.system_b_name || "B";
+
+  // Column headers carry the real system names.
+  const head = document.querySelector("#outcome-changelog thead tr");
+  head.children[2].textContent = `System A (${aName})`;
+  head.children[3].textContent = `System B (${bName})`;
+
+  // Union of every field path we've seen.
+  const paths = new Set([
+    ...Object.keys(ancestor),
+    ...Object.keys(a),
+    ...Object.keys(b),
+    ...Object.keys(written),
+  ]);
+  if (paths.size === 0) {
+    box.hidden = true;
+    return;
+  }
+
+  let changedRows = 0;
+  for (const path of [...paths].sort()) {
+    const ancVal = ancestor[path];
+    const aVal = a[path];
+    const bVal = b[path];
+    const toVal = written[path];
+
+    // Skip paths where nothing effectively changed.
+    if (stableEq(ancVal, toVal) && stableEq(aVal, toVal) && stableEq(bVal, toVal)) {
+      continue;
+    }
+    changedRows++;
+
+    const tr = makeEl("tr");
+    tr.appendChild(makeEl("td", { className: "path", text: path }));
+
+    const ancText = fmtCell(ancVal);
+    const aText = fmtCell(aVal);
+    const bText = fmtCell(bVal);
+    const toText = fmtCell(toVal);
+
+    // Ancestor column: mark the lines that got REMOVED in the final written
+    // value (so deletions show up with `-` here).
+    const ancTd = makeEl("td", { className: "val from" });
+    ancTd.appendChild(renderAncestorDiffCell(ancText, toText));
+    tr.appendChild(ancTd);
+
+    // System A / System B columns: diff each side's value against ancestor,
+    // so the cell shows context (unchanged) + additions relative to ancestor.
+    const aTd = makeEl("td", { className: "val" });
+    aTd.appendChild(renderDiffCell(ancText, aText));
+    if (stableEq(aVal, toVal) && !stableEq(aVal, ancVal)) aTd.classList.add("winner");
+    tr.appendChild(aTd);
+
+    const bTd = makeEl("td", { className: "val" });
+    bTd.appendChild(renderDiffCell(ancText, bText));
+    if (stableEq(bVal, toVal) && !stableEq(bVal, ancVal)) bTd.classList.add("winner");
+    tr.appendChild(bTd);
+
+    // Written column: diff final written value against ancestor so the net
+    // change across the sync is visible at a glance.
+    const toTd = makeEl("td", { className: "val to" });
+    toTd.appendChild(renderDiffCell(ancText, toText));
+    tr.appendChild(toTd);
+
+    let winner = "—";
+    if (stableEq(toVal, ancVal)) {
+      winner = "no-op";
+    } else if (stableEq(toVal, aVal) && stableEq(toVal, bVal)) {
+      winner = "both";
+    } else if (stableEq(toVal, aVal)) {
+      winner = aName;
+    } else if (stableEq(toVal, bVal)) {
+      winner = bName;
+    } else {
+      winner = "derived"; // e.g. additive sum
+    }
+    const wTd = makeEl("td", { className: `winner-cell winner-${winner}` });
+    wTd.appendChild(document.createTextNode(winner));
+    // For numeric additive-style derivations, annotate the arithmetic so
+    // "derived" is self-explanatory instead of mysterious.
+    const hint = derivationHint(ancVal, aVal, bVal, toVal);
+    if (hint) {
+      const sub = document.createElement("div");
+      sub.className = "winner-hint";
+      sub.textContent = hint;
+      wTd.appendChild(sub);
+    }
+    tr.appendChild(wTd);
+
+    tbody.appendChild(tr);
+  }
+
+  box.hidden = changedRows === 0;
 }
 
 async function runSync() {
@@ -347,14 +631,23 @@ async function runSync() {
   }
 
   const body = await res.json();
-  window.__lastWouldWrite = body.stages && body.stages.policy ? body.stages.policy.would_write : null;
-  await animate(body.stages || {}, body.error);
+  const stages = body.stages || {};
+  window.__lastWouldWrite = stages.policy ? stages.policy.would_write : null;
+  window.__lastContext = {
+    ancestor: stages.diff ? stages.diff.ancestor_used : null,
+    cif_a: stages.transform_a ? stages.transform_a.cif : null,
+    cif_b: stages.transform_b ? stages.transform_b.cif : null,
+    would_write: stages.policy ? stages.policy.would_write : null,
+    system_a_name: payload.system_a_name,
+    system_b_name: payload.system_b_name,
+  };
+  await animate(stages, body.error);
 
   if (body.error) {
     setStatus(body.error, "err");
-  } else if (body.stages && body.stages.outcome) {
-    setStatus(`Done · ${body.stages.outcome.kind}`, "ok");
-    renderOutcomeDetail(body.stages.outcome);
+  } else if (stages.outcome) {
+    setStatus(`Done · ${stages.outcome.kind}`, "ok");
+    renderOutcomeDetail(stages.outcome);
   } else {
     setStatus("Done (no outcome)", "");
   }

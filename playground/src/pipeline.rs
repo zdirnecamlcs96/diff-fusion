@@ -2,8 +2,9 @@ use crate::dto::{
     ConflictDto, DiffStage, FieldDiff, OutcomeDto, PolicyStage, StageData, StagesDto,
     SyncRequest, SyncResponse,
 };
+use crate::policies::{OnBothChanged as PgOnBothChanged, SetByKeyComposite};
 use diff_fusion::adapters::test_memory::TestMemoryAdapter;
-use diff_fusion::application::policy::MergePolicyRef;
+use diff_fusion::application::policy::{MergePolicy, MergePolicyRef};
 use diff_fusion::compare_json;
 use diff_fusion::transform_to_cif;
 use diff_fusion::{SyncEngine, SyncOutcome};
@@ -65,11 +66,14 @@ pub async fn run(req: SyncRequest) -> SyncResponse {
         ancestor_used: ancestor.clone(),
     });
 
-    // Parse per-field policy declarations.
-    let mut decls: Vec<(String, MergePolicyRef)> = Vec::new();
+    // Parse per-field policy declarations. Supports every JSON-declarable
+    // `MergePolicyRef` plus the playground-only `set_by_key` kind (the library
+    // has `SetByKey` but it's not in the serde-serializable enum yet; we
+    // construct it directly from the public type instead of modifying the lib).
+    let mut decls: Vec<(String, Box<dyn MergePolicy>)> = Vec::new();
     for (path, decl_value) in &req.policy.per_field {
-        match serde_json::from_value::<MergePolicyRef>(decl_value.clone()) {
-            Ok(ref_) => decls.push((path.clone(), ref_)),
+        match build_policy(decl_value) {
+            Ok(policy) => decls.push((path.clone(), policy)),
             Err(e) => {
                 return SyncResponse::with_error(
                     format!("Invalid policy for `{path}`: {e}"),
@@ -87,8 +91,8 @@ pub async fn run(req: SyncRequest) -> SyncResponse {
 
     // Assemble engine with declared policies + seeded ancestor.
     let mut builder = SyncEngine::builder(adapter_a.clone(), adapter_b.clone());
-    for (path, decl) in &decls {
-        builder = builder.policy(path.clone(), decl.build());
+    for (path, policy) in decls {
+        builder = builder.policy(path, policy);
     }
     if req.ancestor.is_some() {
         builder = builder.seed_ancestor(ENTITY, ID, ancestor.clone());
@@ -128,4 +132,69 @@ fn diffs(a: &Value, b: &Value) -> Vec<FieldDiff> {
         .into_iter()
         .map(|(path, (left, right))| FieldDiff { path, left, right })
         .collect()
+}
+
+/// Build a `MergePolicy` from a raw JSON declaration.
+///
+/// Recognizes every variant of the library's `MergePolicyRef` (`owned_by`,
+/// `additive`, `append`, `state_machine`) plus the playground extension
+/// `set_by_key` for array-of-objects merging. `set_by_key` requires an
+/// `identity` field; items are matched across systems by that key, so local
+/// per-system IDs (e.g. `line_id` on A vs `line_ref` on B) don't interfere
+/// as long as both sides also carry the canonical identity field.
+fn build_policy(decl: &Value) -> Result<Box<dyn MergePolicy>, String> {
+    let kind = decl
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "policy missing `kind`".to_string())?;
+
+    if kind == "set_by_key" {
+        // `identity` may be a single field name (string) or an ordered list
+        // of fields (array) for composite matching — e.g. `["sku", "uom"]`
+        // so the same sku on two different UOMs is treated as two lines.
+        let identity: Vec<String> = match decl.get("identity") {
+            Some(Value::String(s)) => vec![s.clone()],
+            Some(Value::Array(arr)) => arr
+                .iter()
+                .map(|v| {
+                    v.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| "identity array entries must be strings".to_string())
+                })
+                .collect::<Result<_, _>>()?,
+            Some(other) => {
+                return Err(format!("identity must be string or array, got {other}"));
+            }
+            None => return Err("set_by_key requires `identity`".to_string()),
+        };
+        if identity.is_empty() {
+            return Err("identity cannot be empty".to_string());
+        }
+
+        let mut policy = SetByKeyComposite::new(identity);
+        if let Some(s) = decl.get("on_both_changed").and_then(Value::as_str) {
+            policy.on_both_changed = match s {
+                "union" => PgOnBothChanged::Union,
+                "prefer_a" => PgOnBothChanged::PreferA,
+                "prefer_b" => PgOnBothChanged::PreferB,
+                "escalate" => PgOnBothChanged::Escalate,
+                other => return Err(format!("unknown on_both_changed: `{other}`")),
+            };
+        }
+        // Optional stable-anchor fields. When set, each side's rows are
+        // rehomed to their original ancestor row via the anchor *before*
+        // composite-identity matching, so rows that mutated an identity
+        // field (e.g. renamed uom) still match correctly.
+        if let Some(s) = decl.get("a_anchor").and_then(Value::as_str) {
+            policy.a_anchor = Some(s.to_string());
+        }
+        if let Some(s) = decl.get("b_anchor").and_then(Value::as_str) {
+            policy.b_anchor = Some(s.to_string());
+        }
+        return Ok(Box::new(policy));
+    }
+
+    serde_json::from_value::<MergePolicyRef>(decl.clone())
+        .map(|r| r.build())
+        .map_err(|e| e.to_string())
 }
