@@ -119,14 +119,14 @@ Implementation plan for the phases below: [`docs/superpowers/plans/2026-07-23-p0
 ```
 
 **This (Rust) repo is the SSOT home**: spec, kernel, golden vector generator
-(`spec/vectors/`, `src/examples/gen_idempotency_vectors.rs` and friends), and
+(`spec/vectors/`, `core/examples/gen_idempotency_vectors.rs` and friends), and
 boundary JSON Schema (`spec/schema/`) all live here. The kernel
 is pure, synchronous, JSON-in/JSON-out — no I/O, no callbacks crossing the
 boundary — which keeps every delivery target's debugging story the same:
 replay the failing call's JSON arguments in a Rust test.
 
 `diff-fusion-ts` (the `sdk/typescript/` package) delivers the kernel to Node/browser
-via `wasm-bindgen` (`src/src/drivers/wasm.rs` here, vendored artifact at
+via `wasm-bindgen` (`core/src/drivers/wasm.rs` here, vendored artifact at
 `sdk/typescript/wasm/`). The npm package's public API is unchanged; internals delegate
 to the WASM kernel. See `sdk/typescript/README.md`'s Kernel section and `sdk/typescript/CLAUDE.md`
 for the wire contract and build instructions.
@@ -164,11 +164,11 @@ and still is.
 | Invariants wired into cycle | `application::orchestrator` | ✅ shipped |
 | Conflict taxonomy (class per conflict) | `application::policy::ConflictClass` | ✅ shipped |
 | Filesystem ancestor store | `adapters::filesystem_ancestor` | ✅ shipped |
-| Layered directory structure (domain / application / ports / adapters / drivers) | `src/src/` tree | ✅ shipped |
+| Layered directory structure (domain / application / ports / adapters / drivers) | `core/src/` tree | ✅ shipped |
 | WASM kernel driver (`three_way_diff`, `merge_field`, `canonical_json`, `idempotency_key_hex`) | `drivers::wasm` | ✅ shipped |
-| Golden vector conformance (`spec/vectors/`, 121 vectors: 82 idempotency + 39 kernel) + boundary JSON Schema (`spec/schema/`) | `src/examples/gen_*` | ✅ shipped |
+| Golden vector conformance (`spec/vectors/`, 121 vectors: 82 idempotency + 39 kernel) + boundary JSON Schema (`spec/schema/`) | `core/examples/gen_*` | ✅ shipped |
 | wasip1 kernel driver (Go delivery via wazero) | `drivers::wasip1` + `sdk/golang/kernel` | ✅ shipped |
-| Kernel-vector conformance for `three_way_diff`/`merge_field` (`spec/vectors/kernel-vectors.json`, byte-exact incl. error strings) — closes the coverage gap that previously left 2 of 4 kernel functions unverified across runtimes | `src/tests/kernel_vectors_tests.rs` + TS/Go equivalents | ✅ shipped |
+| Kernel-vector conformance for `three_way_diff`/`merge_field` (`spec/vectors/kernel-vectors.json`, byte-exact incl. error strings) — closes the coverage gap that previously left 2 of 4 kernel functions unverified across runtimes | `core/tests/kernel_vectors_tests.rs` + TS/Go equivalents | ✅ shipped |
 | CI test workflow (Rust/TS/Go suites, plus a wasm-freshness job that rebuilds the committed `.wasm` artifacts and re-runs the suites against them) | `.github/workflows/test.yml` | ✅ shipped |
 
 ### Verified by tests
@@ -231,8 +231,8 @@ delivery only: `sdk/golang/kernel` wraps the four kernel functions, nothing else
 
 ### Parked (revisit on real need, not before)
 
-- **Observer/capture stream** (`src/crates/observe`, `src/src/ports/observer.rs`,
-  `src/src/application/capture.rs`) — committed as-is; revisit after the P3
+- **Observer/capture stream** (`core/crates/observe`, `core/src/ports/observer.rs`,
+  `core/src/application/capture.rs`) — committed as-is; revisit after the P3
   Node integration proves the need.
 
 ### Durable persistence (unchanged driver: first real integration)
@@ -292,7 +292,7 @@ here too; both are now kernel-backed.)
 | No ancestor, no three-way diff | Three-way diff against a stored ancestor | Without an ancestor, "A changed" and "both changed" are indistinguishable and silent overwrites become possible |
 | No per-push idempotency or OCC | Both required at the port level | Direct fix for the duplicate-record and silent-overwrite classes of bug |
 
-The existing `DiffFusion` facade (from `src/src/facade.rs`) is unchanged.
+The existing `DiffFusion` facade (from `core/src/facade.rs`) is unchanged.
 Users doing detection-only can ignore the rest of the library.
 
 ---

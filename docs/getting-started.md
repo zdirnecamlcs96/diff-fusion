@@ -95,7 +95,7 @@ for conflict in report.conflicts {
 
 The Tier-1 `SyncEngine` adds the rest: a stored ancestor, per-field merge
 policies, and pushes back to both sides. From
-`src/src/drivers/sync_engine.rs`:
+`core/src/drivers/sync_engine.rs`:
 
 ```rust
 let a = TestMemoryAdapter::new("erp");

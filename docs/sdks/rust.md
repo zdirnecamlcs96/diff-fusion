@@ -7,7 +7,7 @@ nav_order: 1
 
 # Rust
 
-The kernel and the full library, in one crate at `src/`. Full generated API docs: [rustdoc](/diff-fusion/api/rust/).
+The kernel and the full library, in one crate at `core/`. Full generated API docs: [rustdoc](/diff-fusion/api/rust/).
 
 ## Install
 
@@ -21,7 +21,7 @@ serde_json = "1.0"
 
 ## Layer map
 
-From the crate's module doc (`src/src/lib.rs`):
+From the crate's module doc (`core/src/lib.rs`):
 
 - `domain` — pure computation: error categories, diffs, CIF types, idempotency keys
 - `application` — use cases: orchestrator, policies, schema transformation
@@ -35,7 +35,7 @@ The dependency rule points inward: `domain ← application ← drivers` and `dom
 
 ### `DiffFusion` — Tier 0, detection only
 
-`src/src/drivers/facade.rs`. Transform JSON to a common shape and compare two CIF values — no policies, no state, no I/O.
+`core/src/drivers/facade.rs`. Transform JSON to a common shape and compare two CIF values — no policies, no state, no I/O.
 
 ```rust
 pub fn new(schema: Value) -> Self
@@ -52,7 +52,7 @@ pub fn validate_cif(&self, value: &Value) -> Result<(), Vec<String>>
 
 ### `SyncEngine` — Tier 1, full reconciliation
 
-`src/src/drivers/sync_engine.rs`. Builder-configured, hides the ancestor store / escalation queue / orchestrator wiring behind one chain of calls. See the [two-way sync guide]({{ site.baseurl }}/guides/two-way-sync) for a full walkthrough.
+`core/src/drivers/sync_engine.rs`. Builder-configured, hides the ancestor store / escalation queue / orchestrator wiring behind one chain of calls. See the [two-way sync guide]({{ site.baseurl }}/guides/two-way-sync) for a full walkthrough.
 
 ```rust
 // SyncEngine

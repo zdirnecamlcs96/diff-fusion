@@ -4,9 +4,9 @@ TypeScript port of the Rust `diff-fusion` crate. This file captures cross-cuttin
 
 ## Repo geometry
 
-- Rust source of truth: `../../src/src/` (hexagonal: `domain / application / ports / adapters / drivers`).
+- Rust source of truth: `../../core/src/` (hexagonal: `domain / application / ports / adapters / drivers`).
 - TS target: `./src/` — mirrors the Rust layout file-for-file.
-- Tests: `./tests/{unit,integration,contract}` — unit mirrors `src/`, integration ports Rust `../../src/tests/integration/` 1:1.
+- Tests: `./tests/{unit,integration,contract}` — unit mirrors `src/`, integration ports Rust `../../core/tests/integration/` 1:1.
 - Cross-language golden fixtures live in `../../spec/vectors/` (e.g. `idempotency-vectors.json` generated from Rust); tests read them directly.
 
 ## Runtime + toolchain
@@ -59,7 +59,7 @@ at `wasm/`. The Rust crate is SSOT; this package's internals delegate to it.
 - **Conformance.** Golden vectors live in `../../spec/vectors/` (Rust generator
   is the sole producer); tests read them from there directly.
   Boundary JSON Schema lives in `../spec/schema/` (generate via
-  `cargo run --example gen_schema --features schema-gen` from `src/`).
+  `cargo run --example gen_schema --features schema-gen` from `core/`).
 
 ## Translation conventions (inherited from the retired port plan §5)
 

@@ -7,10 +7,10 @@ nav_order: 1
 
 # Two-way sync walkthrough
 
-This walks through `src/examples/two_way_sync.rs` end to end — two systems, three fields, three different merge policies, a preview, a real sync, and a replay. Run it yourself:
+This walks through `core/examples/two_way_sync.rs` end to end — two systems, three fields, three different merge policies, a preview, a real sync, and a replay. Run it yourself:
 
 ```bash
-cd src/
+cd core/
 cargo run --example two_way_sync
 ```
 
@@ -23,7 +23,7 @@ npx tsx examples/twoWaySync.ts
 
 ## Set up two systems and seed divergent state
 
-The example uses `TestMemoryAdapter` (`src/src/adapters/test_memory.rs`) for both sides — no network, but a real `SystemPort` implementation with optimistic concurrency and idempotency dedup. It seeds both sides with the same starting document, then simulates independent drift on each:
+The example uses `TestMemoryAdapter` (`core/src/adapters/test_memory.rs`) for both sides — no network, but a real `SystemPort` implementation with optimistic concurrency and idempotency dedup. It seeds both sides with the same starting document, then simulates independent drift on each:
 
 ```rust
 let erp = TestMemoryAdapter::new("erp");
@@ -46,7 +46,7 @@ After this, `erp` and `inv` disagree on `price` and `qty_recv`, but agree on `st
 
 ## Install a policy per field
 
-The `SyncEngine::builder` (`src/src/drivers/sync_engine.rs`) takes both adapters and installs one merge policy per path:
+The `SyncEngine::builder` (`core/src/drivers/sync_engine.rs`) takes both adapters and installs one merge policy per path:
 
 ```rust
 let engine = SyncEngine::builder(erp.clone(), inv.clone())
@@ -65,9 +65,9 @@ let engine = SyncEngine::builder(erp.clone(), inv.clone())
 
 Why each policy fits the field it's attached to (see [Concepts]({{ site.baseurl }}/concepts) for the merge policy tier vocabulary):
 
-- **`price` → `OwnedBy::new("erp")`** (`src/src/application/policy/owned_by.rs`). Price is a financial fact that should have one source of truth. The ERP is authoritative; `inv`'s change to `999` is discarded rather than merged. Per that module's doc comment, owner-based policies are the single most effective conflict-reduction strategy — they eliminate the majority of conflicts before they can even arise, because a non-owner's edit is never a candidate for "correct" in the first place.
-- **`qty_recv` → `Additive`** (`src/src/application/policy/additive.rs`). Quantity received is a counter — `erp` recorded some units in, `inv` recorded others, and the correct merged value is `ancestor + delta_erp + delta_inv`, not "pick a winner". `Additive` is only defined for numeric fields; non-numeric input becomes a conflict rather than a guess.
-- **`status` → `StateMachine`** (`src/src/application/policy/state_machine.rs`). Status is an enum with legal transitions. Declaring `open → closed` and `open → cancelled` as the only allowed moves means a corrupt transition (e.g. `closed → open`) can never silently take effect. Here both sides made the *same* legal transition, so the policy resolves cleanly; if they'd diverged onto different branches, it would escalate rather than guess which branch is "right".
+- **`price` → `OwnedBy::new("erp")`** (`core/src/application/policy/owned_by.rs`). Price is a financial fact that should have one source of truth. The ERP is authoritative; `inv`'s change to `999` is discarded rather than merged. Per that module's doc comment, owner-based policies are the single most effective conflict-reduction strategy — they eliminate the majority of conflicts before they can even arise, because a non-owner's edit is never a candidate for "correct" in the first place.
+- **`qty_recv` → `Additive`** (`core/src/application/policy/additive.rs`). Quantity received is a counter — `erp` recorded some units in, `inv` recorded others, and the correct merged value is `ancestor + delta_erp + delta_inv`, not "pick a winner". `Additive` is only defined for numeric fields; non-numeric input becomes a conflict rather than a guess.
+- **`status` → `StateMachine`** (`core/src/application/policy/state_machine.rs`). Status is an enum with legal transitions. Declaring `open → closed` and `open → cancelled` as the only allowed moves means a corrupt transition (e.g. `closed → open`) can never silently take effect. Here both sides made the *same* legal transition, so the policy resolves cleanly; if they'd diverged onto different branches, it would escalate rather than guess which branch is "right".
 
 ## Preview before writing
 
@@ -166,7 +166,7 @@ Note `CycleOutcome` is a discriminated union with a `kind` tag on the TS side (`
 
 ## Fields with no policy
 
-If a field changes and no policy was registered for its path, the orchestrator does not guess. It routes the change straight to the escalation queue as an `UnresolvedConflict` tagged with `ConflictClass::NoPolicy` (`src/src/application/policy/mod.rs`):
+If a field changes and no policy was registered for its path, the orchestrator does not guess. It routes the change straight to the escalation queue as an `UnresolvedConflict` tagged with `ConflictClass::NoPolicy` (`core/src/application/policy/mod.rs`):
 
 ```rust
 let Some(policy) = policies.lookup(&change.path) else {

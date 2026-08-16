@@ -23,9 +23,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src
+          workspaces: core
       - name: Build rustdoc
-        working-directory: src
+        working-directory: core
         run: cargo doc --no-deps -p diff_fusion
 
       - uses: actions/setup-node@v4
@@ -61,7 +61,7 @@ jobs:
       - name: Merge generated API docs into the site
         run: |
           mkdir -p docs/_site/api
-          cp -r src/target/doc docs/_site/api/rust
+          cp -r core/target/doc docs/_site/api/rust
           cp -r sdk/typescript/docs-api docs/_site/api/ts
           printf '<meta http-equiv="refresh" content="0;url=diff_fusion/index.html">\n' > docs/_site/api/rust/index.html
 

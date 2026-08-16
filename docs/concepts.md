@@ -41,7 +41,7 @@ step sees a system's native shape.
 
 Every cycle compares three states, not two: the stored ancestor
 (last-known-reconciled), side A's current view, and side B's current
-view. `three_way_diff(ancestor, a, b)` (`src/src/domain/diff/three_way.rs`)
+view. `three_way_diff(ancestor, a, b)` (`core/src/domain/diff/three_way.rs`)
 produces a `Changelog` where every entry is a `FieldChange` carrying a
 `source: ChangeSource::A | B | Both`.
 
@@ -53,7 +53,7 @@ reconciliation degrades to timestamp tie-breaking.
 
 ## Ancestor store
 
-The `AncestorStore` port (`src/src/ports/ancestor.rs`) holds the last
+The `AncestorStore` port (`core/src/ports/ancestor.rs`) holds the last
 known reconciled canonical state per `(entity_type, canonical_id)`. A
 cycle advances it only *after* every push confirms — never before. Two
 shipped implementations: `InMemoryAncestorStore` (tests, ephemeral) and
@@ -91,7 +91,7 @@ reviewing each field.
 
 ## Idempotency and optimistic concurrency
 
-From `src/src/domain/idempotency.rs`:
+From `core/src/domain/idempotency.rs`:
 
 > `idempotency_key(canonical_id, operation, payload)` is a pure function
 > of its inputs — no timestamps, no random IDs. When an adapter retries a
@@ -107,7 +107,7 @@ From `src/src/domain/idempotency.rs`:
 > `("ab", "c", ...)` never collide.
 
 The key is a 32-byte BLAKE3 hash. Every `SystemPort::upsert` also takes an
-`expect_version: Option<&str>` (`src/src/ports/system.rs`) — the
+`expect_version: Option<&str>` (`core/src/ports/system.rs`) — the
 orchestrator's assertion about the version it last observed. A mismatch
 signals another actor moved first.
 
@@ -126,7 +126,7 @@ per category:
 
 ## Error categories
 
-From `src/src/domain/error.rs`:
+From `core/src/domain/error.rs`:
 
 > Every error that flows through the orchestrator falls into exactly one
 > of three categories. Each category drives a different recovery path:

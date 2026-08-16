@@ -4,7 +4,7 @@
 
 Transform each system's JSON to a canonical format (CIF), compute a three-way diff against a stored ancestor, resolve per-field merge policies, and push the result back — with optimistic concurrency and deterministic idempotency keys. Unresolvable conflicts route to a review queue with full provenance.
 
-This package is a behaviour-equivalent port of the [Rust diff-fusion crate](../../src/). Idempotency keys and filesystem ancestor filenames are byte-identical across runtimes, so you can ingest with one runtime and reconcile with the other.
+This package is a behaviour-equivalent port of the [Rust diff-fusion crate](../../core/). Idempotency keys and filesystem ancestor filenames are byte-identical across runtimes, so you can ingest with one runtime and reconcile with the other.
 
 > **Name:** "fusion" = fusing different formats into CIF for comparison — not merging data blindly.
 

@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to diff-fusion! This document outlines our coding principles, architectural guidelines, and development practices.
 
-> The Rust crate lives in `src/` — file paths and `cargo` commands in this
+> The Rust crate lives in `core/` — file paths and `cargo` commands in this
 > document are relative to that directory. The TypeScript SDK is `sdk/typescript/`,
 > the Go SDK `sdk/golang/`; the cross-language contract lives in `spec/`.
 

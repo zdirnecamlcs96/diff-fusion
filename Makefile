@@ -37,9 +37,9 @@ docs-api: docs-api-rust docs-api-ts
 ## rustdoc -> /api/rust. Uses the host cargo; run after docs-build, since
 ## `jekyll build` wipes _site.
 docs-api-rust:
-	cd src && cargo doc --no-deps -p diff_fusion
+	cd core && cargo doc --no-deps -p diff_fusion
 	mkdir -p $(SITE)/api/rust
-	tar -C src/target/doc -cf - . | tar -C $(SITE)/api/rust -xf -
+	tar -C core/target/doc -cf - . | tar -C $(SITE)/api/rust -xf -
 	printf '<meta http-equiv="refresh" content="0;url=diff_fusion/index.html">\n' \
 	  > $(SITE)/api/rust/index.html
 

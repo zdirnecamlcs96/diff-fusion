@@ -1,7 +1,7 @@
 # diff-fusion architecture
 
 > This document describes the Rust crate. File paths are relative to
-> `src/` (e.g. `src/domain/…` means `src/src/domain/…`).
+> `core/` (e.g. `src/domain/…` means `core/src/domain/…`).
 
 This document is the map. For *why* the design is shaped this way, read
 `App.md`. For *how to work inside the code*, read `New claude.md`. This

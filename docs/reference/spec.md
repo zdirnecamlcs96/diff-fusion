@@ -26,7 +26,7 @@ Both files are generated **only** by the Rust examples — there is no TS or Go 
 
 ## Regenerating the vectors and schemas
 
-From `src/`:
+From `core/`:
 
 ```bash
 cargo run --example gen_schema --features schema-gen
@@ -34,14 +34,14 @@ cargo run --example gen_idempotency_vectors > ../spec/vectors/idempotency-vector
 cargo run --example gen_filesystem_filenames > ../spec/vectors/filesystem-filenames.json
 ```
 
-`gen_schema` writes all three schema files directly into `spec/schema/` (it resolves the path from `CARGO_MANIFEST_DIR`, so it's safe to run from any working directory as long as the command itself runs `cargo run` from `src/`). The vector generators print to stdout — the `>` redirect is what actually updates the checked-in file.
+`gen_schema` writes all three schema files directly into `spec/schema/` (it resolves the path from `CARGO_MANIFEST_DIR`, so it's safe to run from any working directory as long as the command itself runs `cargo run` from `core/`). The vector generators print to stdout — the `>` redirect is what actually updates the checked-in file.
 
 ## Per-language conformance
 
 Each delivery's own test suite is what checks its output against these vectors — there's no separate cross-language runner:
 
 ```bash
-cargo test               # from src/          — Rust: also the vectors' origin
+cargo test               # from core/         — Rust: also the vectors' origin
 npm test                 # from sdk/typescript/ — TypeScript
 go test ./...            # from sdk/golang/     — Go
 ```

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-(cd src && cargo build --target wasm32-unknown-unknown --release)
+(cd core && cargo build --target wasm32-unknown-unknown --release)
 
 # wasm-bindgen CLI must match the crate version pinned in Cargo.toml
 # (`wasm-bindgen = "=0.2.100"`) — a mismatch produces artifacts the runtime
@@ -13,6 +13,6 @@ if [ "$ACTUAL_WASM_BINDGEN" != "$EXPECTED_WASM_BINDGEN" ]; then
   exit 1
 fi
 
-wasm-bindgen src/target/wasm32-unknown-unknown/release/diff_fusion.wasm \
+wasm-bindgen core/target/wasm32-unknown-unknown/release/diff_fusion.wasm \
   --target nodejs --out-dir sdk/typescript/wasm
 ls -la sdk/typescript/wasm/

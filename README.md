@@ -18,8 +18,8 @@ JSON diff without the reconciliation machinery.
 
 Three delivery packages share one Rust kernel (see `ROADMAP.md`):
 
-- `src/` — the Rust crate (kernel SSOT + full library). All `cargo`
-  commands in this document run from `src/`.
+- `core/` — the Rust crate (kernel SSOT + full library). All `cargo`
+  commands in this document run from `core/`.
 - `sdk/typescript/` — npm package, kernel delivered via wasm-bindgen (`sdk/typescript/wasm/`).
 - `sdk/golang/` — Go module, kernel delivered via wasm32-wasip1 + wazero.
 - `spec/` — cross-language contract: golden vectors + boundary JSON Schema.

@@ -7,7 +7,7 @@ nav_order: 2
 
 # Writing an adapter
 
-An adapter connects one external system to the reconciliation pipeline by implementing `SystemPort` (`src/src/ports/system.rs`). The orchestrator never branches on which system it's talking to — every per-system quirk (auth, pagination, native vs. faked optimistic concurrency) stays inside the adapter.
+An adapter connects one external system to the reconciliation pipeline by implementing `SystemPort` (`core/src/ports/system.rs`). The orchestrator never branches on which system it's talking to — every per-system quirk (auth, pagination, native vs. faked optimistic concurrency) stays inside the adapter.
 
 The trait:
 
@@ -39,7 +39,7 @@ pub trait SystemPort: Send + Sync {
 }
 ```
 
-`src/src/adapters/test_memory.rs`'s `TestMemoryAdapter` is the reference implementation — small enough to read in full, but it exercises every contract point below. It backs the two-way sync example in the [previous guide]({{ site.baseurl }}/guides/two-way-sync).
+`core/src/adapters/test_memory.rs`'s `TestMemoryAdapter` is the reference implementation — small enough to read in full, but it exercises every contract point below. It backs the two-way sync example in the [previous guide]({{ site.baseurl }}/guides/two-way-sync).
 
 ## The methods
 
@@ -108,6 +108,6 @@ Both checks matter together: idempotency is checked *before* the version check i
 
 `SystemPort` is the only port every sync needs two of. Three more ports round out a deployment, each with a working in-memory or filesystem default so you only implement your own when you need durability or a real destination:
 
-- **`AncestorStore`** (`src/src/ports/ancestor.rs`) — `get`/`put` for the last-synced canonical view, keyed by `(entity_type, canonical_id)`. `SyncEngine` defaults to an in-memory store; `src/src/adapters/filesystem_ancestor.rs`'s `FilesystemAncestorStore` ships as a durable example — one JSON file per entity under a root directory, written via temp-file-then-rename so a crash mid-write can't leave a half-written ancestor on disk.
-- **`EscalationQueue`** (`src/src/ports/escalation.rs`) — `push`/`len` for conflicts that survive resolution. `SyncEngine` defaults to an in-memory queue; a real deployment usually wants this backed by something a reviewer can see (a database table, a ticket queue).
-- **`Observer`** (`src/src/ports/observer.rs`) — a passive sink that receives a `Capture` (both sides' canonical views for one entity) for logging or visualization. It has no transport dependencies and doesn't participate in the merge pipeline — implement it to ship snapshots to your own tooling.
+- **`AncestorStore`** (`core/src/ports/ancestor.rs`) — `get`/`put` for the last-synced canonical view, keyed by `(entity_type, canonical_id)`. `SyncEngine` defaults to an in-memory store; `core/src/adapters/filesystem_ancestor.rs`'s `FilesystemAncestorStore` ships as a durable example — one JSON file per entity under a root directory, written via temp-file-then-rename so a crash mid-write can't leave a half-written ancestor on disk.
+- **`EscalationQueue`** (`core/src/ports/escalation.rs`) — `push`/`len` for conflicts that survive resolution. `SyncEngine` defaults to an in-memory queue; a real deployment usually wants this backed by something a reviewer can see (a database table, a ticket queue).
+- **`Observer`** (`core/src/ports/observer.rs`) — a passive sink that receives a `Capture` (both sides' canonical views for one entity) for logging or visualization. It has no transport dependencies and doesn't participate in the merge pipeline — implement it to ship snapshots to your own tooling.
