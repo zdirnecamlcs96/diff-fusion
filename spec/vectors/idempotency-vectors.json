@@ -1,0 +1,891 @@
+[
+  {
+    "canonicalId": "PO-1",
+    "canonicalPayloadJson": "{\"qty\":5,\"sku\":\"A1\"}",
+    "expectedHex": "3daac4644b7a2b7e7b22f1b32f77b7f6b7fcfd1047e1bbb96c66f89c5bd2a4bb",
+    "operation": "upsert",
+    "payload": {
+      "qty": 5,
+      "sku": "A1"
+    }
+  },
+  {
+    "canonicalId": "PO-1",
+    "canonicalPayloadJson": "{\"qty\":5,\"sku\":\"A1\"}",
+    "expectedHex": "3daac4644b7a2b7e7b22f1b32f77b7f6b7fcfd1047e1bbb96c66f89c5bd2a4bb",
+    "operation": "upsert",
+    "payload": {
+      "qty": 5,
+      "sku": "A1"
+    }
+  },
+  {
+    "canonicalId": "PO-1",
+    "canonicalPayloadJson": "{}",
+    "expectedHex": "929ef722c00f19bd61e22e0fc0f45b606197e13557af94db403a4bc98e516415",
+    "operation": "upsert",
+    "payload": {}
+  },
+  {
+    "canonicalId": "PO-1",
+    "canonicalPayloadJson": "null",
+    "expectedHex": "1543138a07b5facc990667c9f081c7ed6325ae9f51f8ccf91c1a4412f8b3c5df",
+    "operation": "delete",
+    "payload": null
+  },
+  {
+    "canonicalId": "PO-1",
+    "canonicalPayloadJson": "[]",
+    "expectedHex": "f0ac79ebc34c9916245d47ef8f562a336df66c3d6943546f88a47f1b4d5435ab",
+    "operation": "upsert",
+    "payload": []
+  },
+  {
+    "canonicalId": "REORDER",
+    "canonicalPayloadJson": "{\"a\":1,\"b\":2,\"c\":3}",
+    "expectedHex": "ec75a29869882c65303255b3151597ef6265a10e8e0c7d9c4b1b6a74d634b371",
+    "operation": "sync",
+    "payload": {
+      "a": 1,
+      "b": 2,
+      "c": 3
+    }
+  },
+  {
+    "canonicalId": "REORDER",
+    "canonicalPayloadJson": "{\"a\":1,\"b\":2,\"c\":3}",
+    "expectedHex": "ec75a29869882c65303255b3151597ef6265a10e8e0c7d9c4b1b6a74d634b371",
+    "operation": "sync",
+    "payload": {
+      "a": 1,
+      "b": 2,
+      "c": 3
+    }
+  },
+  {
+    "canonicalId": "REORDER",
+    "canonicalPayloadJson": "{\"a\":1,\"b\":2,\"c\":3}",
+    "expectedHex": "ec75a29869882c65303255b3151597ef6265a10e8e0c7d9c4b1b6a74d634b371",
+    "operation": "sync",
+    "payload": {
+      "a": 1,
+      "b": 2,
+      "c": 3
+    }
+  },
+  {
+    "canonicalId": "REORDER",
+    "canonicalPayloadJson": "{\"a\":1,\"b\":2,\"c\":3}",
+    "expectedHex": "ec75a29869882c65303255b3151597ef6265a10e8e0c7d9c4b1b6a74d634b371",
+    "operation": "sync",
+    "payload": {
+      "a": 1,
+      "b": 2,
+      "c": 3
+    }
+  },
+  {
+    "canonicalId": "REORDER",
+    "canonicalPayloadJson": "{\"a\":1,\"b\":2,\"c\":3}",
+    "expectedHex": "ec75a29869882c65303255b3151597ef6265a10e8e0c7d9c4b1b6a74d634b371",
+    "operation": "sync",
+    "payload": {
+      "a": 1,
+      "b": 2,
+      "c": 3
+    }
+  },
+  {
+    "canonicalId": "REORDER",
+    "canonicalPayloadJson": "{\"a\":1,\"b\":2,\"c\":3}",
+    "expectedHex": "ec75a29869882c65303255b3151597ef6265a10e8e0c7d9c4b1b6a74d634b371",
+    "operation": "sync",
+    "payload": {
+      "a": 1,
+      "b": 2,
+      "c": 3
+    }
+  },
+  {
+    "canonicalId": "NESTED-REORDER",
+    "canonicalPayloadJson": "{\"meta\":{\"ts\":100,\"ver\":1},\"outer\":{\"x\":1,\"y\":2}}",
+    "expectedHex": "120301efd564e5b92812963acda1ff5c2edf8f47e0def706ed53f453cd0d75d9",
+    "operation": "sync",
+    "payload": {
+      "meta": {
+        "ts": 100,
+        "ver": 1
+      },
+      "outer": {
+        "x": 1,
+        "y": 2
+      }
+    }
+  },
+  {
+    "canonicalId": "NESTED-REORDER",
+    "canonicalPayloadJson": "{\"meta\":{\"ts\":100,\"ver\":1},\"outer\":{\"x\":1,\"y\":2}}",
+    "expectedHex": "120301efd564e5b92812963acda1ff5c2edf8f47e0def706ed53f453cd0d75d9",
+    "operation": "sync",
+    "payload": {
+      "meta": {
+        "ts": 100,
+        "ver": 1
+      },
+      "outer": {
+        "x": 1,
+        "y": 2
+      }
+    }
+  },
+  {
+    "canonicalId": "DEEP-1",
+    "canonicalPayloadJson": "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":{\"f\":42}}}}}}",
+    "expectedHex": "16a4f0659cb95a3b6a12283a9b7a6904cb09d363d47c9edba7b26c0af2037ba5",
+    "operation": "upsert",
+    "payload": {
+      "a": {
+        "b": {
+          "c": {
+            "d": {
+              "e": {
+                "f": 42
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "canonicalId": "DEEP-2",
+    "canonicalPayloadJson": "{\"l1\":{\"l2\":{\"l3\":{\"l4\":{\"l5\":{\"l6\":{\"leaf\":\"found\"}}}}}}}",
+    "expectedHex": "379df4ca0c16cd1a62b3f551ea8f47ea55e739069727ad74f0a44dd6bd40a578",
+    "operation": "upsert",
+    "payload": {
+      "l1": {
+        "l2": {
+          "l3": {
+            "l4": {
+              "l5": {
+                "l6": {
+                  "leaf": "found"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "canonicalId": "DEEP-ARRAY",
+    "canonicalPayloadJson": "[[[[[[[1,2,3]]]]]]]",
+    "expectedHex": "3623d1831b28edc7884fa5847278c33c423e19d69ac3e78d0a4c06e55d1cc8a8",
+    "operation": "upsert",
+    "payload": [
+      [
+        [
+          [
+            [
+              [
+                [
+                  1,
+                  2,
+                  3
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    ]
+  },
+  {
+    "canonicalId": "DEEP-MIXED",
+    "canonicalPayloadJson": "{\"root\":{\"children\":[{\"id\":1,\"kids\":[{\"id\":2,\"kids\":[{\"id\":3,\"kids\":[]}]}]}]}}",
+    "expectedHex": "4e031ac38d171bc1837d18868ac619ba1e65e04af1fa787051e23c781681ca04",
+    "operation": "sync",
+    "payload": {
+      "root": {
+        "children": [
+          {
+            "id": 1,
+            "kids": [
+              {
+                "id": 2,
+                "kids": [
+                  {
+                    "id": 3,
+                    "kids": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "canonicalId": "N-ZERO",
+    "canonicalPayloadJson": "{\"n\":0}",
+    "expectedHex": "264fabefef37e8bbcf90147e7dd614ebe21216d22ca777ec11e122da0ca4e3ec",
+    "operation": "upsert",
+    "payload": {
+      "n": 0
+    }
+  },
+  {
+    "canonicalId": "N-NEG",
+    "canonicalPayloadJson": "{\"n\":-1}",
+    "expectedHex": "16925b9230539d86952a7063aebd916bfcbfc03d868b44267155f7a34e4250ed",
+    "operation": "upsert",
+    "payload": {
+      "n": -1
+    }
+  },
+  {
+    "canonicalId": "N-POS",
+    "canonicalPayloadJson": "{\"n\":1}",
+    "expectedHex": "5a4ebe251958be6b91053f53a47184ed4473b9becee2e208f588c2e69ca1422a",
+    "operation": "upsert",
+    "payload": {
+      "n": 1
+    }
+  },
+  {
+    "canonicalId": "N-I32-MAX",
+    "canonicalPayloadJson": "{\"n\":2147483647}",
+    "expectedHex": "311c6081d43aade8b4d4fbc008b1a5da0e818a372001a109ab494d0d41cd2437",
+    "operation": "upsert",
+    "payload": {
+      "n": 2147483647
+    }
+  },
+  {
+    "canonicalId": "N-I32-MIN",
+    "canonicalPayloadJson": "{\"n\":-2147483648}",
+    "expectedHex": "c6be833e4f0ce30f82bd9acf972940cffb70037abe252e1164a72cd43c61d582",
+    "operation": "upsert",
+    "payload": {
+      "n": -2147483648
+    }
+  },
+  {
+    "canonicalId": "N-SAFE-MAX",
+    "canonicalPayloadJson": "{\"n\":9007199254740991}",
+    "expectedHex": "e6f27b18a52ea09f79d48ec94f72ea4ae85568da1e67ca4c17fbf09ee47a8d4e",
+    "operation": "upsert",
+    "payload": {
+      "n": 9007199254740991
+    }
+  },
+  {
+    "canonicalId": "N-SAFE-MIN",
+    "canonicalPayloadJson": "{\"n\":-9007199254740991}",
+    "expectedHex": "7e6825f59b78e4e19cea18e12e9d4a08db69f6aa518fc0d230d3a49f7b9d5d5d",
+    "operation": "upsert",
+    "payload": {
+      "n": -9007199254740991
+    }
+  },
+  {
+    "canonicalId": "F-HALF",
+    "canonicalPayloadJson": "{\"n\":0.5}",
+    "expectedHex": "bdee7d781c3fa637ba16385bfdd868c7d05a25d1c76ea4191408ffcc1c435916",
+    "operation": "upsert",
+    "payload": {
+      "n": 0.5
+    }
+  },
+  {
+    "canonicalId": "F-NEG-HALF",
+    "canonicalPayloadJson": "{\"n\":-0.5}",
+    "expectedHex": "677b970de05099b87451e74107e245d51099ea6a9aed70a700acd99cae9cd916",
+    "operation": "upsert",
+    "payload": {
+      "n": -0.5
+    }
+  },
+  {
+    "canonicalId": "F-PI",
+    "canonicalPayloadJson": "{\"n\":3.14}",
+    "expectedHex": "9a7790efa382dd1cd671576e88a1df9428f9e7866580559956ee8819e38b4b5f",
+    "operation": "upsert",
+    "payload": {
+      "n": 3.14
+    }
+  },
+  {
+    "canonicalId": "F-SMALL",
+    "canonicalPayloadJson": "{\"n\":0.001}",
+    "expectedHex": "0cc4e04a0d59e1ba1b0a9ec8cb928adeb010d0d77b198322587c6142cd054bd5",
+    "operation": "upsert",
+    "payload": {
+      "n": 0.001
+    }
+  },
+  {
+    "canonicalId": "F-MIXED",
+    "canonicalPayloadJson": "{\"frac\":0.25,\"int\":5,\"neg_frac\":-1.5}",
+    "expectedHex": "33c4e33d7de27a3c7a2820167593fd0a42b68e988b1ad8e62d052c3c89a98026",
+    "operation": "upsert",
+    "payload": {
+      "frac": 0.25,
+      "int": 5,
+      "neg_frac": -1.5
+    }
+  },
+  {
+    "canonicalId": "U-LATIN-EXT",
+    "canonicalPayloadJson": "{\"name\":\"café ☕\",\"tag\":\"naïve\"}",
+    "expectedHex": "eab59fb4adb3cd8c14a21928ca7b5ebfffb34984f732ea74c70f168544297416",
+    "operation": "upsert",
+    "payload": {
+      "name": "café ☕",
+      "tag": "naïve"
+    }
+  },
+  {
+    "canonicalId": "U-CJK",
+    "canonicalPayloadJson": "{\"msg\":\"你好世界\"}",
+    "expectedHex": "5f7729ebe7e479c15a3839d2d28e36d032257708baf5b94242e3b7d1932dbbb8",
+    "operation": "upsert",
+    "payload": {
+      "msg": "你好世界"
+    }
+  },
+  {
+    "canonicalId": "U-RTL-HEBREW",
+    "canonicalPayloadJson": "{\"msg\":\"שלום עולם\"}",
+    "expectedHex": "2d6dffe2736b7b102fe9ac1353f233c6a06c1642de151133d81a10c99ecc1417",
+    "operation": "upsert",
+    "payload": {
+      "msg": "שלום עולם"
+    }
+  },
+  {
+    "canonicalId": "U-RTL-ARABIC",
+    "canonicalPayloadJson": "{\"msg\":\"مرحبا بالعالم\"}",
+    "expectedHex": "04e03d42eb0974587b31b7e1a385483416a71166a2a95e4a9d902aaf096c4de4",
+    "operation": "upsert",
+    "payload": {
+      "msg": "مرحبا بالعالم"
+    }
+  },
+  {
+    "canonicalId": "U-BIDI",
+    "canonicalPayloadJson": "{\"s\":\"abc‎def‏ghi\"}",
+    "expectedHex": "fe05fe49d1631c3fb1b1757d1ac11a95760517e929a0e4b9dd1cb6a17115b4f7",
+    "operation": "upsert",
+    "payload": {
+      "s": "abc‎def‏ghi"
+    }
+  },
+  {
+    "canonicalId": "U-ZWJ",
+    "canonicalPayloadJson": "{\"s\":\"a​b‌c‍d﻿e\"}",
+    "expectedHex": "256af9ce7b1bbe2e46df448a2acab7bc9d27ed5e4e23e314ed008c8a41629179",
+    "operation": "upsert",
+    "payload": {
+      "s": "a​b‌c‍d﻿e"
+    }
+  },
+  {
+    "canonicalId": "U-COMBINING",
+    "canonicalPayloadJson": "{\"a\":\"café\",\"b\":\"café\"}",
+    "expectedHex": "18a77f8a52c5bdf6f60234358958df6b991a308e750b552ab4f8f3270a6414dd",
+    "operation": "upsert",
+    "payload": {
+      "a": "café",
+      "b": "café"
+    }
+  },
+  {
+    "canonicalId": "U-EMOJI",
+    "canonicalPayloadJson": "{\"emoji\":\"😀🎉🚀\"}",
+    "expectedHex": "c052bcb3b017bb8f24addbfcd569862e1df7460c4a1f2af3afcfac7a0a1676f5",
+    "operation": "upsert",
+    "payload": {
+      "emoji": "😀🎉🚀"
+    }
+  },
+  {
+    "canonicalId": "U-ZWJ-FAMILY",
+    "canonicalPayloadJson": "{\"s\":\"👨‍👩‍👧‍👦\"}",
+    "expectedHex": "e2834fdf3408f3e5afe2d02c3864bba3217daa731179b13f9c37950af0e42a2d",
+    "operation": "upsert",
+    "payload": {
+      "s": "👨‍👩‍👧‍👦"
+    }
+  },
+  {
+    "canonicalId": "U-MATH",
+    "canonicalPayloadJson": "{\"s\":\"𝐇𝐞𝐥𝐥𝐨\"}",
+    "expectedHex": "f3931f5ee8794e702ddf23c9b295d9a63a6d0474b4398724d6df061991408687",
+    "operation": "upsert",
+    "payload": {
+      "s": "𝐇𝐞𝐥𝐥𝐨"
+    }
+  },
+  {
+    "canonicalId": "U-SEPARATORS",
+    "canonicalPayloadJson": "{\"s\":\"line one two\"}",
+    "expectedHex": "0eaab19b5af98e36037ad09ca1f56777e52c06d1691fa16280a5d28a42d21ac8",
+    "operation": "upsert",
+    "payload": {
+      "s": "line one two"
+    }
+  },
+  {
+    "canonicalId": "U-KEY-MIXED",
+    "canonicalPayloadJson": "{\"ascii\":\"plain-key\",\"é\":\"combining-key\",\"中文\":\"cjk-key\",\"🔑\":\"emoji-key\",\"𠀀\":\"cjk-ext-b-key\"}",
+    "expectedHex": "d9bedd507fd1d59189e96050ecc10cd53d47c8cae8a6724a4dca3117241b9f46",
+    "operation": "upsert",
+    "payload": {
+      "ascii": "plain-key",
+      "é": "combining-key",
+      "中文": "cjk-key",
+      "🔑": "emoji-key",
+      "𠀀": "cjk-ext-b-key"
+    }
+  },
+  {
+    "canonicalId": "U-PROTO-KEY",
+    "canonicalPayloadJson": "{\"__proto__\":\"not-special-in-rust\",\"ascii\":\"plain-key\"}",
+    "expectedHex": "fde9119409f4acee6b4f3ce1704ea835bf1ed858c81e47dc0cadd87dcdfc10d1",
+    "operation": "upsert",
+    "payload": {
+      "__proto__": "not-special-in-rust",
+      "ascii": "plain-key"
+    }
+  },
+  {
+    "canonicalId": "U-KEY-SUPPLEMENTARY-VS-BMP",
+    "canonicalPayloadJson": "{\"豈\":\"bmp-compat-ideograph-key\",\"𝕂\":\"supplementary-plane-key\"}",
+    "expectedHex": "3719cc1cef16d4eed8555e8eaae86683d1a457829459f586a8b8b940f7f6b82f",
+    "operation": "upsert",
+    "payload": {
+      "豈": "bmp-compat-ideograph-key",
+      "𝕂": "supplementary-plane-key"
+    }
+  },
+  {
+    "canonicalId": "U-KEY-INT-LIKE-ORDER",
+    "canonicalPayloadJson": "{\"!\":1,\"0\":2}",
+    "expectedHex": "1747322fa0b10a35beb9c9cd8d0240f7edba09ba404d612ac02a926d3d58680d",
+    "operation": "upsert",
+    "payload": {
+      "!": 1,
+      "0": 2
+    }
+  },
+  {
+    "canonicalId": "REORDER-BIG",
+    "canonicalPayloadJson": "{\"k1\":1,\"k10\":10,\"k11\":11,\"k12\":12,\"k2\":2,\"k3\":3,\"k4\":4,\"k5\":5,\"k6\":6,\"k7\":7,\"k8\":8,\"k9\":9}",
+    "expectedHex": "fd094798ee4ad2bc5e0b038bf0b6bb634a6968a986c78967b9dc83f86493f693",
+    "operation": "sync",
+    "payload": {
+      "k1": 1,
+      "k10": 10,
+      "k11": 11,
+      "k12": 12,
+      "k2": 2,
+      "k3": 3,
+      "k4": 4,
+      "k5": 5,
+      "k6": 6,
+      "k7": 7,
+      "k8": 8,
+      "k9": 9
+    }
+  },
+  {
+    "canonicalId": "REORDER-BIG",
+    "canonicalPayloadJson": "{\"k1\":1,\"k10\":10,\"k11\":11,\"k12\":12,\"k2\":2,\"k3\":3,\"k4\":4,\"k5\":5,\"k6\":6,\"k7\":7,\"k8\":8,\"k9\":9}",
+    "expectedHex": "fd094798ee4ad2bc5e0b038bf0b6bb634a6968a986c78967b9dc83f86493f693",
+    "operation": "sync",
+    "payload": {
+      "k1": 1,
+      "k10": 10,
+      "k11": 11,
+      "k12": 12,
+      "k2": 2,
+      "k3": 3,
+      "k4": 4,
+      "k5": 5,
+      "k6": 6,
+      "k7": 7,
+      "k8": 8,
+      "k9": 9
+    }
+  },
+  {
+    "canonicalId": "EMPTY-NESTED-OBJ",
+    "canonicalPayloadJson": "{\"a\":{},\"b\":[]}",
+    "expectedHex": "07fe3cf50bdb6b0ccf2d6ef1e93e7169bcc5e87aa1b6e608f20e6db4a9e23956",
+    "operation": "upsert",
+    "payload": {
+      "a": {},
+      "b": []
+    }
+  },
+  {
+    "canonicalId": "EMPTY-NESTED-ARR",
+    "canonicalPayloadJson": "[{},[],{},[]]",
+    "expectedHex": "723f53173577e4a8d6764e0e5a50abb2d70800338e5e2bea88361ce91a13f978",
+    "operation": "upsert",
+    "payload": [
+      {},
+      [],
+      {},
+      []
+    ]
+  },
+  {
+    "canonicalId": "EMPTY-DEEP",
+    "canonicalPayloadJson": "{\"outer\":{\"inner_arr\":[],\"inner_obj\":{}}}",
+    "expectedHex": "931a7edaaf44eb5aef190fabc553891b0eaa6b7c8328db4aa77f7d82ce267678",
+    "operation": "upsert",
+    "payload": {
+      "outer": {
+        "inner_arr": [],
+        "inner_obj": {}
+      }
+    }
+  },
+  {
+    "canonicalId": "EMPTY-ARRAY-OF-EMPTY",
+    "canonicalPayloadJson": "[[],[],[]]",
+    "expectedHex": "51ea8ff938a63e336be2a4f985fd07d3f7efc65975535a6d45dea352d2acd725",
+    "operation": "upsert",
+    "payload": [
+      [],
+      [],
+      []
+    ]
+  },
+  {
+    "canonicalId": "EMPTY-OBJ-OF-EMPTY",
+    "canonicalPayloadJson": "{\"a\":{},\"b\":{},\"c\":{}}",
+    "expectedHex": "0e712271fc38aba7b848d1d9c4f3323b604053e4c5d691c70a5f6ce25c53cf3f",
+    "operation": "upsert",
+    "payload": {
+      "a": {},
+      "b": {},
+      "c": {}
+    }
+  },
+  {
+    "canonicalId": "LONG-STRING",
+    "canonicalPayloadJson": "{\"s\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+    "expectedHex": "573ae1c2dd1525012620e0197c2fe9ff6c8b8db8cd07fb149e38b78e4386c6da",
+    "operation": "upsert",
+    "payload": {
+      "s": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  },
+  {
+    "canonicalId": "LONG-STRING-UNICODE",
+    "canonicalPayloadJson": "{\"s\":\"日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日\"}",
+    "expectedHex": "38321c0188ad2f1c5d55d19bbb901700b7706967af9e5fd66a13ac482ab140f8",
+    "operation": "upsert",
+    "payload": {
+      "s": "日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日日"
+    }
+  },
+  {
+    "canonicalId": "a",
+    "canonicalPayloadJson": "null",
+    "expectedHex": "dd864423a377c8d1ca4afdd0a18563e1608efabb8de51ba867803abe23bfd7b9",
+    "operation": "bc",
+    "payload": null
+  },
+  {
+    "canonicalId": "ab",
+    "canonicalPayloadJson": "null",
+    "expectedHex": "c80f1061bf52f87f45b00accc72e3698e0661356254ee9286fefb607a004bdf0",
+    "operation": "c",
+    "payload": null
+  },
+  {
+    "canonicalId": "",
+    "canonicalPayloadJson": "null",
+    "expectedHex": "0bb662926669852c67a78f0bd5f738bd9f2a82f0f9552da21435892b2c554b5a",
+    "operation": "",
+    "payload": null
+  },
+  {
+    "canonicalId": "",
+    "canonicalPayloadJson": "null",
+    "expectedHex": "9c0dff8cec6b2ea2ed0c0074aa056764d1bec51c271b56eeb2312cf4dba83d6a",
+    "operation": "x",
+    "payload": null
+  },
+  {
+    "canonicalId": "x",
+    "canonicalPayloadJson": "null",
+    "expectedHex": "b997f6f08a28b30709c8855da65cc2c4d424b4b00ea9528f0c8fdc222fa28daf",
+    "operation": "",
+    "payload": null
+  },
+  {
+    "canonicalId": "aaaaaaa",
+    "canonicalPayloadJson": "{}",
+    "expectedHex": "46f9c7ab336be2cb8f45d583ca0572b6dfb1b554db6d2df7b9832088e29042d4",
+    "operation": "op",
+    "payload": {}
+  },
+  {
+    "canonicalId": "aaaaaaaa",
+    "canonicalPayloadJson": "{}",
+    "expectedHex": "a3ac05eb9fdcb7a77c6be1d468a46bfb49b1759d3e49a938b98217108a59c6b6",
+    "operation": "op",
+    "payload": {}
+  },
+  {
+    "canonicalId": "aaaaaaaaa",
+    "canonicalPayloadJson": "{}",
+    "expectedHex": "9d89c1d0879574e6ec58232b0423e0ca6b66bb993c3d5c2ef1a3f618ad0375ee",
+    "operation": "op",
+    "payload": {}
+  },
+  {
+    "canonicalId": "A-MIX",
+    "canonicalPayloadJson": "[1,\"two\",null,true,false,3.14]",
+    "expectedHex": "665710e18b950f9eb78636958d6f130d043b0fbf347f40adcbd87215f4ab4198",
+    "operation": "upsert",
+    "payload": [
+      1,
+      "two",
+      null,
+      true,
+      false,
+      3.14
+    ]
+  },
+  {
+    "canonicalId": "A-NESTED-MIX",
+    "canonicalPayloadJson": "[[1,2],[\"a\",\"b\"],[null,true],[{\"k\":\"v\"}]]",
+    "expectedHex": "e382c820bf869f7669e5146aa2fcba1f83bb58c310dfe7195e6eed5d40314523",
+    "operation": "upsert",
+    "payload": [
+      [
+        1,
+        2
+      ],
+      [
+        "a",
+        "b"
+      ],
+      [
+        null,
+        true
+      ],
+      [
+        {
+          "k": "v"
+        }
+      ]
+    ]
+  },
+  {
+    "canonicalId": "A-OBJECTS",
+    "canonicalPayloadJson": "[{\"id\":1},{\"id\":2},{\"id\":3}]",
+    "expectedHex": "e8fff0048096d97bf59462bc876cef3a2fe91e8ecfb2225cdc6d991ef0809c4e",
+    "operation": "upsert",
+    "payload": [
+      {
+        "id": 1
+      },
+      {
+        "id": 2
+      },
+      {
+        "id": 3
+      }
+    ]
+  },
+  {
+    "canonicalId": "A-REORDER",
+    "canonicalPayloadJson": "[{\"a\":1,\"b\":2},{\"a\":1,\"b\":2}]",
+    "expectedHex": "d45e4dcd62ae5a0f24c0a5127ae873593a6fe58560d7f81cc7a8c7f55ae7a270",
+    "operation": "upsert",
+    "payload": [
+      {
+        "a": 1,
+        "b": 2
+      },
+      {
+        "a": 1,
+        "b": 2
+      }
+    ]
+  },
+  {
+    "canonicalId": "NULL-ROOT",
+    "canonicalPayloadJson": "null",
+    "expectedHex": "78d44d25003bf15748d0742d60d83d1dd705c5552e549a0fe6c467bde21da6ae",
+    "operation": "upsert",
+    "payload": null
+  },
+  {
+    "canonicalId": "NULL-LEAF",
+    "canonicalPayloadJson": "{\"a\":null,\"b\":1}",
+    "expectedHex": "199c7784e80c1e5c49e9f4ad27f7360c75e4833f5482665780d0de09722041b2",
+    "operation": "upsert",
+    "payload": {
+      "a": null,
+      "b": 1
+    }
+  },
+  {
+    "canonicalId": "NULL-DEEP",
+    "canonicalPayloadJson": "{\"a\":{\"b\":{\"c\":null}}}",
+    "expectedHex": "8971961075dec2ccdbf5874d4342ff4792e9f1e443112dc4b3ec7ed7b49b1cc0",
+    "operation": "upsert",
+    "payload": {
+      "a": {
+        "b": {
+          "c": null
+        }
+      }
+    }
+  },
+  {
+    "canonicalId": "NULL-ARRAY",
+    "canonicalPayloadJson": "[null,null,null]",
+    "expectedHex": "23372c6239f82bb418e37e520df98db51594ee72d51b90d10ac2ae44b22213bd",
+    "operation": "upsert",
+    "payload": [
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "canonicalId": "NULL-MIXED",
+    "canonicalPayloadJson": "{\"a\":[null,1,null],\"b\":null}",
+    "expectedHex": "1c982044db2c26cccf52074d8dfaccf384ce608d697763a3c99c1b325515c2ed",
+    "operation": "upsert",
+    "payload": {
+      "a": [
+        null,
+        1,
+        null
+      ],
+      "b": null
+    }
+  },
+  {
+    "canonicalId": "ESC-CTRL",
+    "canonicalPayloadJson": "{\"s\":\"line1\\nline2\\ttab\\u0001end\"}",
+    "expectedHex": "64c966b7acead4c2fe0c6d2eba0fd3609676083eef077626efc9cac877a0d645",
+    "operation": "upsert",
+    "payload": {
+      "s": "line1\nline2\ttab\u0001end"
+    }
+  },
+  {
+    "canonicalId": "ESC-BACK",
+    "canonicalPayloadJson": "{\"s\":\"a\\\\b\\\"c\"}",
+    "expectedHex": "76a21a51aef5f543c2b48078a3f0cffa7c61c545a81aefa245fc1bdeed48f8f0",
+    "operation": "upsert",
+    "payload": {
+      "s": "a\\b\"c"
+    }
+  },
+  {
+    "canonicalId": "ESC-ALL-CTRL",
+    "canonicalPayloadJson": "{\"s\":\"\\u0000\\u0001\\u0002\\u001f\"}",
+    "expectedHex": "9c4e670bf5bab19053ead694ed2a4c326084cfa5415a13a9860977bf2e7ba9c7",
+    "operation": "upsert",
+    "payload": {
+      "s": "\u0000\u0001\u0002\u001f"
+    }
+  },
+  {
+    "canonicalId": "ESC-SLASH",
+    "canonicalPayloadJson": "{\"url\":\"https://example.com/path\"}",
+    "expectedHex": "8e11fcd641b11afaf436b1e618ddea435d1556f98332ff4cbb01794657cd2f3f",
+    "operation": "upsert",
+    "payload": {
+      "url": "https://example.com/path"
+    }
+  },
+  {
+    "canonicalId": "ESC-MIXED",
+    "canonicalPayloadJson": "{\"s\":\"tab\\there\\nnewline\\\"quote\\\\back\"}",
+    "expectedHex": "e1a995b5ec81bdbb3e71d9cc1dcbf30f8ec6b6de6be980890f7284cba2e2fa30",
+    "operation": "upsert",
+    "payload": {
+      "s": "tab\there\nnewline\"quote\\back"
+    }
+  },
+  {
+    "canonicalId": "B-TRUE",
+    "canonicalPayloadJson": "{\"flag\":true}",
+    "expectedHex": "f8968c10ca90f080bcbd22c80fc7edf143eaee2027950451cdcb926b49101cab",
+    "operation": "upsert",
+    "payload": {
+      "flag": true
+    }
+  },
+  {
+    "canonicalId": "B-FALSE",
+    "canonicalPayloadJson": "{\"flag\":false}",
+    "expectedHex": "d71026bae2aca2b1716d469c516b9ac7d0137648fdc993a6240106d008553bdf",
+    "operation": "upsert",
+    "payload": {
+      "flag": false
+    }
+  },
+  {
+    "canonicalId": "B-ALL",
+    "canonicalPayloadJson": "{\"f\":false,\"n\":null,\"t\":true}",
+    "expectedHex": "26b9d55f0d23463cfac83ed292a343242adec184d813010c816e9e3340004d6a",
+    "operation": "upsert",
+    "payload": {
+      "f": false,
+      "n": null,
+      "t": true
+    }
+  },
+  {
+    "canonicalId": "DIFF-ID-1",
+    "canonicalPayloadJson": "{\"x\":1}",
+    "expectedHex": "3bf2179158b925410a55adb6d9e186fe2db570763af17ab20b82077ac894adcf",
+    "operation": "upsert",
+    "payload": {
+      "x": 1
+    }
+  },
+  {
+    "canonicalId": "DIFF-ID-2",
+    "canonicalPayloadJson": "{\"x\":1}",
+    "expectedHex": "1f63a37123301200d04e9c8e08b72122530b61bf4d8a8282c6cbce2906804398",
+    "operation": "upsert",
+    "payload": {
+      "x": 1
+    }
+  },
+  {
+    "canonicalId": "DIFF-OP-1",
+    "canonicalPayloadJson": "{\"x\":1}",
+    "expectedHex": "54b47311fc020488ca2abcc92dbab72dfb560d26588ac7bd816ee17727353076",
+    "operation": "create",
+    "payload": {
+      "x": 1
+    }
+  },
+  {
+    "canonicalId": "DIFF-OP-2",
+    "canonicalPayloadJson": "{\"x\":1}",
+    "expectedHex": "ffac66a79751f563475e9d42ce73b57071f6d060c4563831db88fe67361cc8ca",
+    "operation": "delete",
+    "payload": {
+      "x": 1
+    }
+  }
+]

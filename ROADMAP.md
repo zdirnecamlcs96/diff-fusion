@@ -91,21 +91,64 @@ These are enforced in code and in review:
 
 ---
 
-## Current state
+## Architecture: Rust kernel, per-host delivery
 
-The library is built up in layers. Each layer compiles and tests on its
-own — this was deliberate, bottom-up decomposition (the diff primitive is
-the kernel; everything else grows outward from it). The ordering mirrors
-Syncpal (Shekow, DAIS 2019) and Bayou (Terry et al., SOSP 1995): diff
-first, then reconcile.
+As of the 2026-07-23 reframe, the library is split into three layers instead
+of one growing Rust crate. The driver for the split: the actual near-term
+goal is using this reconciliation logic inside an existing Node.js project,
+with a Go consumer likely after that — maintaining N full hand-ports doesn't
+scale for a solo, non-Rust-primary maintainer, and the kernel's semantics
+are mostly frozen once integrated. Full design and rationale:
+[`docs/superpowers/specs/2026-07-23-diff-fusion-reframe-design.md`](docs/superpowers/specs/2026-07-23-diff-fusion-reframe-design.md).
+Implementation plan for the phases below: [`docs/superpowers/plans/2026-07-23-p0-p2-wasm-kernel.md`](docs/superpowers/plans/2026-07-23-p0-p2-wasm-kernel.md).
+
+```
+┌─ application layer (per host, never ported) ────────────────┐
+│  user's Node project · CLI · playground · future Go service │
+│  orchestrator loop · ancestor store · escalation · adapters │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ plain data (JSON)
+┌─ delivery drivers (thin, per ecosystem) ────────────────────┐
+│  rlib (Rust) · wasm-bindgen (JS/TS) · wasip1 + wazero (Go)  │
+└──────────────────────────┬──────────────────────────────────┘
+┌─ kernel: Rust, SSOT, pure functions ────────────────────────┐
+│  three-way diff · canonical JSON · idempotency keys ·       │
+│  policy resolution (Tiers 1-3) · invariants ·               │
+│  conflict classification                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**This (Rust) repo is the SSOT home**: spec, kernel, golden vector generator
+(`spec/vectors/`, `src/examples/gen_idempotency_vectors.rs` and friends), boundary
+JSON Schema (`spec/schema/`), and the playground all live here. The kernel
+is pure, synchronous, JSON-in/JSON-out — no I/O, no callbacks crossing the
+boundary — which keeps every delivery target's debugging story the same:
+replay the failing call's JSON arguments in a Rust test.
+
+`diff-fusion-ts` (the `sdk/typescript/` package) delivers the kernel to Node/browser
+via `wasm-bindgen` (`src/src/drivers/wasm.rs` here, vendored artifact at
+`sdk/typescript/wasm/`). The npm package's public API is unchanged; internals delegate
+to the WASM kernel. See `sdk/typescript/README.md`'s Kernel section and `sdk/typescript/CLAUDE.md`
+for the wire contract and build instructions.
+
+### Layers unchanged by the reframe
+
+The orchestrator cycle, ancestor store, escalation queue, port/adapter
+traits, and the `SyncEngine`/`DiffFusion` facades are all still native,
+per-host code — they were never candidates for the kernel, since they're
+app-layer glue (storage, retries, adapters) that bends to each host's own
+conventions. Everything below "What's shipped" was true before the reframe
+and still is.
+
+### What's shipped
 
 | Layer | Module | Status |
 | ----- | ------ | ------ |
 | Two-way diff | `compare` | ✅ shipped |
 | Canonical transformation | `transform`, `cif_trait` | ✅ shipped |
-| Three-way diff with provenance | `diff::three_way` | ✅ shipped |
+| Three-way diff with provenance | `diff::three_way` | ✅ shipped (kernel SSOT; WASM-delivered to TS) |
 | Ancestor store (trait + in-memory) | `ancestor` | ✅ shipped |
-| Idempotency keys | `idempotency` | ✅ shipped |
+| Idempotency keys | `idempotency` | ✅ shipped (kernel SSOT; WASM-delivered to TS) |
 | Error categories | `error` | ✅ shipped |
 | Tier 1 policies | `policy::{owned_by, additive, append, state_machine}` | ✅ shipped |
 | Escape hatch (LWW w/ reason) | `policy::escape_hatch` | ✅ shipped |
@@ -121,7 +164,12 @@ first, then reconcile.
 | Invariants wired into cycle | `application::orchestrator` | ✅ shipped |
 | Conflict taxonomy (class per conflict) | `application::policy::ConflictClass` | ✅ shipped |
 | Filesystem ancestor store | `adapters::filesystem_ancestor` | ✅ shipped |
-| Layered directory structure (domain / application / ports / adapters / drivers) | `src/` tree | ✅ shipped |
+| Layered directory structure (domain / application / ports / adapters / drivers) | `src/src/` tree | ✅ shipped |
+| WASM kernel driver (`three_way_diff`, `merge_field`, `canonical_json`, `idempotency_key_hex`) | `drivers::wasm` | ✅ shipped |
+| Golden vector conformance (`spec/vectors/`, 121 vectors: 82 idempotency + 39 kernel) + boundary JSON Schema (`spec/schema/`) | `src/examples/gen_*` | ✅ shipped |
+| wasip1 kernel driver (Go delivery via wazero) | `drivers::wasip1` + `sdk/golang/kernel` | ✅ shipped |
+| Kernel-vector conformance for `three_way_diff`/`merge_field` (`spec/vectors/kernel-vectors.json`, byte-exact incl. error strings) — closes the coverage gap that previously left 2 of 4 kernel functions unverified across runtimes | `src/tests/kernel_vectors_tests.rs` + TS/Go equivalents | ✅ shipped |
+| CI test workflow (Rust/TS/Go suites, plus a wasm-freshness job that rebuilds the committed `.wasm` artifacts and re-runs the suites against them) | `.github/workflows/test.yml` | ✅ shipped |
 
 ### Verified by tests
 
@@ -132,15 +180,64 @@ first, then reconcile.
   conflict lands in the escalation queue and neither side is mutated.
 - Contract suite: an adapter is "done" when it passes every test in
   `run_contract_suite`. No judgement calls.
+- Cross-runtime: the WASM kernel swap kept the pre-existing 519-test
+  TypeScript suite green unchanged (Gate 1), plus golden vectors and a
+  one-time differential fuzz of the Rust kernel against the (still
+  present, pending deletion) native TS kernel. The fuzz caught three
+  native-only canonicalization bugs the kernel didn't have — `__proto__`
+  key drop, UTF-16-vs-code-point key sort, and integer-like-key
+  enumeration order — now pinned as vectors (`U-PROTO-KEY`,
+  `U-KEY-SUPPLEMENTARY-VS-BMP`, `U-KEY-INT-LIKE-ORDER`). This is the
+  concrete case for kernel-as-SSOT: a hand-port can silently diverge on
+  JS/Rust semantics that never come up in hand-written test cases.
+- Boundary overhead (Gate 2): kernel `threeWayDiff` on a 50-field entity
+  runs ~112-114µs/call in Node — 4.2-4.4x slower than the native TS it
+  replaced, but immaterial against the 500µs budget (a sync cycle includes
+  a ≥10ms network round-trip). `idempotencyKeyHex` is the other direction:
+  the WASM BLAKE3 implementation is ~1.5x *faster* than the JS port.
 
 ---
 
-## Not yet built
+## Forward roadmap
 
-In priority order. Each item has a clear driver — if the driver doesn't
-apply yet, the work waits.
+Priority order. Each item has a driver — if the driver doesn't apply yet,
+the work waits. This supersedes the old "Not yet built" list: the
+diff/policy/orchestrator layers above are done; what's left is delivery
+and integration, not new kernel semantics.
 
-### Durable persistence
+### P3 — Node integration
+
+Wire the kernel into the user's existing Node project: system adapters for
+that project's real systems, ancestor storage in the project's own
+database (replacing the in-memory/filesystem stores used for development),
+and a thin cycle loop reusing the `diff-fusion-ts` orchestrator. Shadow
+mode first — pull-and-diff without pushing, to validate against real data
+before any write path is live.
+
+*Gate:* a shadow-mode diff run over real project data.
+
+### P4 — Go delivery (shipped: kernel delivery)
+
+Mechanism resolved 2026-07-26: `wasm32-wasip1` build run by **wazero** (pure
+Go, zero cgo). Full design and rationale:
+[`docs/superpowers/specs/2026-07-26-p4-go-delivery-design.md`](docs/superpowers/specs/2026-07-26-p4-go-delivery-design.md).
+
+The Go orchestrator loop remains deferred until a real Go consumer exists —
+same as the rest of the app layer waits per host. This ships kernel
+delivery only: `sdk/golang/kernel` wraps the four kernel functions, nothing else.
+
+*Gate:* passed 2026-07-26 — 82 golden vectors green under `go test`
+(`sdk/golang/kernel/kernel_test.go`).
+
+### Parked (revisit on real need, not before)
+
+- **Observer/capture stream** (`src/crates/observe`, `src/src/ports/observer.rs`,
+  `src/src/application/capture.rs`) — committed as-is; revisit after the P3
+  Node integration proves the need.
+- **Svelte playground rewrite** (`src/playground/web`) — committed as-is;
+  remains a Rust-side dev/debug tool, not a delivery target.
+
+### Durable persistence (unchanged driver: first real integration)
 
 - ✅ **`FilesystemAncestorStore`** — JSON-per-entity, atomic writes via
   tempfile+rename, hashed filenames for arbitrary canonical_id strings.
@@ -149,24 +246,13 @@ apply yet, the work waits.
 - ⏳ Durable escalation queue (SQS / Postgres / similar) — the in-memory
   queue still loses items on restart.
 
-Driver for the remaining items: first real integration with a live system.
-
-### First real adapter
-
-Pick one authentic integration pair and build one adapter end-to-end.
-Until this happens, the port trait and capability flags are under-pressured
-by synthetic tests alone.
-
-Candidates (not chosen yet): Shopify + Amazon, NetSuite + internal
-service, custom REST-pair. The contract test suite makes "is this adapter
-done?" a test question, not a judgement call.
-
 ### Schema-carried policy declarations
 
-`policy::declaration::MergePolicyRef` is serde-ready but not yet wired into
-the existing JSON schema parser in `transform.rs`. The bridge function
-lets users declare policies in their schema JSON and build a runtime
-`PolicyMap` from it. Deferring until a real use case demands it.
+`policy::declaration::MergePolicyRef` is serde-ready and now doubles as the
+WASM kernel's `resolve`/`merge_field` policy-config wire shape (schema at
+`spec/schema/policy-config.schema.json`), but it's still not wired into the
+JSON schema parser in `transform.rs` for host-side schema-driven policy
+declaration. Deferring until a real use case (P3) demands it.
 
 ### Observability
 
@@ -181,7 +267,24 @@ webhook source to design against.
 
 ---
 
-## What changed from v0.1.0 and why
+## What changed and why
+
+### The reframe (2026-07-23): Rust kernel as SSOT, WASM delivery
+
+| Before | Now | Reason |
+| ------ | --- | ------ |
+| `diff-fusion-ts` was a hand-written full port of the Rust crate | `diff-fusion-ts` delegates three-way diff, idempotency, and built-in policy resolution to the Rust kernel via WASM; native TS bodies survive as `native*` functions pending a human-gated deletion | Zero-drift reuse beats re-implementation once kernel semantics are mostly frozen; three real canonicalization bugs (see above) had already crept into the native port unnoticed |
+| No formal conformance contract across runtimes | `spec/vectors/` (82 vectors) + `spec/schema/` (3 boundary schemas) are the shared contract; every delivery target must pass the same vectors, no judgement calls | A target with red vectors is broken, full stop — the same discipline the contract test suite already applied to adapters |
+| Full-library multi-language port was the implicit plan | Kernel scope is pure functions only (diff, resolve, canonical JSON, idempotency key); orchestrator/adapters/ports stay native per host | The actual goal is one Node integration plus a likely Go consumer, not a general multi-language library product |
+
+Two native TS modules are deliberately *not* kernel-backed — `invariants.ts`
+(not kernel-able: no wire shape for an arbitrary user predicate) and the
+richer knobs on `SetByKey` beyond what `MergePolicyRef` declares. These are
+scope boundaries, not omissions; see `sdk/typescript/CLAUDE.md` for the
+current list. (`compare.ts` and `transform.ts` were kernel-v2 candidates
+here too; both are now kernel-backed.)
+
+### What changed from v0.1.0 and why
 
 | v0.1.0 | Now | Reason |
 | ------ | --- | ------ |
@@ -191,7 +294,7 @@ webhook source to design against.
 | No ancestor, no three-way diff | Three-way diff against a stored ancestor | Without an ancestor, "A changed" and "both changed" are indistinguishable and silent overwrites become possible |
 | No per-push idempotency or OCC | Both required at the port level | Direct fix for the duplicate-record and silent-overwrite classes of bug |
 
-The existing `DiffFusion` facade (from `src/facade.rs`) is unchanged.
+The existing `DiffFusion` facade (from `src/src/facade.rs`) is unchanged.
 Users doing detection-only can ignore the rest of the library.
 
 ---

@@ -1,0 +1,86 @@
+[
+  {
+    "canonicalId": "PO-1",
+    "entityType": "purchase_order",
+    "expectedEntityDir": "purchase_order",
+    "expectedFile": "089e79fb9a9afec10a6d578496500b5d.json",
+    "expectedRelPath": "purchase_order/089e79fb9a9afec10a6d578496500b5d.json"
+  },
+  {
+    "canonicalId": "INV-999",
+    "entityType": "invoice",
+    "expectedEntityDir": "invoice",
+    "expectedFile": "5226f2de67fca33c9669a1f4cafa39c6.json",
+    "expectedRelPath": "invoice/5226f2de67fca33c9669a1f4cafa39c6.json"
+  },
+  {
+    "canonicalId": "SKU-1",
+    "entityType": "item",
+    "expectedEntityDir": "item",
+    "expectedFile": "7638ae9ac5a5ac5e1fa756d605f0ad2b.json",
+    "expectedRelPath": "item/7638ae9ac5a5ac5e1fa756d605f0ad2b.json"
+  },
+  {
+    "canonicalId": "order-42",
+    "entityType": "PurchaseOrder",
+    "expectedEntityDir": "PurchaseOrder",
+    "expectedFile": "da58aec942b98161b1751269f0ad5563.json",
+    "expectedRelPath": "PurchaseOrder/da58aec942b98161b1751269f0ad5563.json"
+  },
+  {
+    "canonicalId": "customer/42:abc",
+    "entityType": "thing",
+    "expectedEntityDir": "thing",
+    "expectedFile": "4adbebec9f2cfecfe4ddc7dfc2563441.json",
+    "expectedRelPath": "thing/4adbebec9f2cfecfe4ddc7dfc2563441.json"
+  },
+  {
+    "canonicalId": "vendor:abc",
+    "entityType": "thing",
+    "expectedEntityDir": "thing",
+    "expectedFile": "2460e8c80e49b509708b0ac10138d4b5.json",
+    "expectedRelPath": "thing/2460e8c80e49b509708b0ac10138d4b5.json"
+  },
+  {
+    "canonicalId": "üñîçødé",
+    "entityType": "customer",
+    "expectedEntityDir": "customer",
+    "expectedFile": "9a5dea3c8096d1909cbb0a2b496d0408.json",
+    "expectedRelPath": "customer/9a5dea3c8096d1909cbb0a2b496d0408.json"
+  },
+  {
+    "canonicalId": "id-1",
+    "entityType": "weird type/with:chars",
+    "expectedEntityDir": "weird_type_with_chars",
+    "expectedFile": "408305be4fb7da4f6f173ba16384edcd.json",
+    "expectedRelPath": "weird_type_with_chars/408305be4fb7da4f6f173ba16384edcd.json"
+  },
+  {
+    "canonicalId": "id-2",
+    "entityType": "with spaces",
+    "expectedEntityDir": "with_spaces",
+    "expectedFile": "d622197a7e4fb702817084188c480304.json",
+    "expectedRelPath": "with_spaces/d622197a7e4fb702817084188c480304.json"
+  },
+  {
+    "canonicalId": "nonempty-id",
+    "entityType": "",
+    "expectedEntityDir": "_",
+    "expectedFile": "39ba5dec2e34fadbf2e5c0bca31b4dfe.json",
+    "expectedRelPath": "_/39ba5dec2e34fadbf2e5c0bca31b4dfe.json"
+  },
+  {
+    "canonicalId": "",
+    "entityType": "entity",
+    "expectedEntityDir": "entity",
+    "expectedFile": "af1349b9f5f9a1a6a0404dea36dcc949.json",
+    "expectedRelPath": "entity/af1349b9f5f9a1a6a0404dea36dcc949.json"
+  },
+  {
+    "canonicalId": "this-is-a-very-long-canonical-identifier-that-would-be-unwieldy-on-disk",
+    "entityType": "bulk",
+    "expectedEntityDir": "bulk",
+    "expectedFile": "fe3d9312ad3b2d4596da4a9d85a49317.json",
+    "expectedRelPath": "bulk/fe3d9312ad3b2d4596da4a9d85a49317.json"
+  }
+]

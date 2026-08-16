@@ -1,0 +1,530 @@
+{
+  "compareJson": [
+    {
+      "a": "{\"price\":10,\"qty\":5}",
+      "b": "{\"price\":10,\"qty\":5}",
+      "expected": "[]",
+      "isErr": false,
+      "name": "no-change"
+    },
+    {
+      "a": "\"x\"",
+      "b": "\"y\"",
+      "expected": "[[\"\",[\"x\",\"y\"]]]",
+      "isErr": false,
+      "name": "scalar-mismatch"
+    },
+    {
+      "a": "{\"z\":1,\"a\":1,\"m\":1}",
+      "b": "{\"z\":2,\"a\":2,\"m\":2}",
+      "expected": "[[\"a\",[1,2]],[\"m\",[1,2]],[\"z\",[1,2]]]",
+      "isErr": false,
+      "name": "multi-key-sorted-order"
+    },
+    {
+      "a": "{\"pricing\":{\"amount\":10,\"currency\":\"usd\"}}",
+      "b": "{\"pricing\":{\"amount\":12,\"currency\":\"usd\"}}",
+      "expected": "[[\"pricing.amount\",[10,12]]]",
+      "isErr": false,
+      "name": "nested-object-path"
+    },
+    {
+      "a": "{\"keep\":1,\"gone\":\"x\"}",
+      "b": "{\"keep\":1,\"added\":\"y\"}",
+      "expected": "[[\"added\",[null,\"y\"]],[\"gone\",[\"x\",null]]]",
+      "isErr": false,
+      "name": "missing-key-treated-as-null"
+    },
+    {
+      "a": "{\"tags\":[\"a\",\"b\"]}",
+      "b": "{\"tags\":[\"a\",\"c\"]}",
+      "expected": "[[\"tags\",[[\"a\",\"b\"],[\"a\",\"c\"]]]]",
+      "isErr": false,
+      "name": "array-value-replacement"
+    },
+    {
+      "a": "{bad",
+      "b": "{}",
+      "expected": "invalid a JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-a-json"
+    },
+    {
+      "a": "{}",
+      "b": "{bad",
+      "expected": "invalid b JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-b-json"
+    }
+  ],
+  "mergeField": [
+    {
+      "change": "{\"path\":\"price\",\"old_value\":10,\"new_from_a\":15,\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"netsuite\",\"system_b\":\"shopify\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":15}",
+      "isErr": false,
+      "name": "owned-by-owner-a-wins",
+      "policyRef": "{\"kind\":\"owned_by\",\"system\":\"netsuite\"}"
+    },
+    {
+      "change": "{\"path\":\"price\",\"old_value\":1,\"new_from_b\":99,\"source\":\"b\"}",
+      "ctx": "{\"system_a\":\"netsuite\",\"system_b\":\"shopify\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":1}",
+      "isErr": false,
+      "name": "owned-by-non-owner-reverts",
+      "policyRef": "{\"kind\":\"owned_by\",\"system\":\"netsuite\"}"
+    },
+    {
+      "change": "{\"path\":\"price\",\"old_value\":1,\"new_from_a\":2,\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"netsuite\",\"system_b\":\"shopify\"}",
+      "expected": "{\"kind\":\"Conflict\",\"reason\":\"owner 'unknown_system' does not match either side ('netsuite', 'shopify')\"}",
+      "isErr": false,
+      "name": "owned-by-unknown-system-conflict",
+      "policyRef": "{\"kind\":\"owned_by\",\"system\":\"unknown_system\"}"
+    },
+    {
+      "change": "{\"path\":\"status\",\"old_value\":\"draft\",\"new_from_a\":null,\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":null}",
+      "isErr": false,
+      "name": "owned-by-null-clear-resolves",
+      "policyRef": "{\"kind\":\"owned_by\",\"system\":\"x\"}"
+    },
+    {
+      "change": "{\"path\":\"qty\",\"old_value\":10,\"new_from_a\":13,\"new_from_b\":12,\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":15.0}",
+      "isErr": false,
+      "name": "additive-both-sides-accumulate",
+      "policyRef": "{\"kind\":\"additive\"}"
+    },
+    {
+      "change": "{\"path\":\"qty\",\"old_value\":10,\"new_from_a\":\"eleven\",\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Conflict\",\"reason\":\"additive requires numeric values on all sides (a is not numeric)\"}",
+      "isErr": false,
+      "name": "additive-non-numeric-side-conflict",
+      "policyRef": "{\"kind\":\"additive\"}"
+    },
+    {
+      "change": "{\"path\":\"notes\",\"old_value\":[\"x\"],\"new_from_a\":[\"x\",\"y\"],\"new_from_b\":[\"x\",\"z\"],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[\"x\",\"y\",\"z\"]}",
+      "isErr": false,
+      "name": "append-both-sides-concatenate",
+      "policyRef": "{\"kind\":\"append\"}"
+    },
+    {
+      "change": "{\"path\":\"notes\",\"old_value\":\"text\",\"new_from_a\":\"text plus\",\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Conflict\",\"reason\":\"append requires array values on all sides\"}",
+      "isErr": false,
+      "name": "append-non-array-conflict",
+      "policyRef": "{\"kind\":\"append\"}"
+    },
+    {
+      "change": "{\"path\":\"status\",\"old_value\":\"draft\",\"new_from_a\":\"open\",\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":\"open\"}",
+      "isErr": false,
+      "name": "state-machine-legal-transition",
+      "policyRef": "{\"kind\":\"state_machine\",\"transitions\":[{\"from\":\"draft\",\"to\":\"open\"}]}"
+    },
+    {
+      "change": "{\"path\":\"status\",\"old_value\":\"closed\",\"new_from_a\":\"draft\",\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Conflict\",\"reason\":\"illegal transition 'closed' -> 'draft'\"}",
+      "isErr": false,
+      "name": "state-machine-illegal-transition",
+      "policyRef": "{\"kind\":\"state_machine\",\"transitions\":[{\"from\":\"draft\",\"to\":\"open\"}]}"
+    },
+    {
+      "change": "{\"path\":\"status\",\"old_value\":\"open\",\"new_from_a\":\"closed\",\"new_from_b\":\"cancelled\",\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Conflict\",\"reason\":\"divergent state transitions: 'open' -> 'closed' (A) vs 'open' -> 'cancelled' (B)\"}",
+      "isErr": false,
+      "name": "state-machine-divergent-transitions-conflict",
+      "policyRef": "{\"kind\":\"state_machine\",\"transitions\":[{\"from\":\"open\",\"to\":\"closed\"},{\"from\":\"open\",\"to\":\"cancelled\"}]}"
+    },
+    {
+      "change": "{\"path\":\"x\",\"old_value\":1,\"new_from_a\":2,\"new_from_b\":3,\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":2}",
+      "isErr": false,
+      "name": "last-write-wins-newer-timestamp-wins",
+      "policyRef": "{\"kind\":\"last_write_wins\",\"reason\":\"no natural owner\",\"timestamp_a\":200,\"timestamp_b\":100}"
+    },
+    {
+      "change": "{\"path\":\"x\",\"old_value\":1,\"new_from_a\":2,\"new_from_b\":3,\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Conflict\",\"reason\":\"last_write_wins: timestamps tie\"}",
+      "isErr": false,
+      "name": "last-write-wins-tied-timestamps-conflict",
+      "policyRef": "{\"kind\":\"last_write_wins\",\"reason\":\"tie test\",\"timestamp_a\":100,\"timestamp_b\":100}"
+    },
+    {
+      "change": "{\"path\":\"x\",\"old_value\":1,\"new_from_a\":7,\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":7}",
+      "isErr": false,
+      "name": "last-write-wins-single-side-trivial",
+      "policyRef": "{\"kind\":\"last_write_wins\",\"reason\":\"legacy\",\"timestamp_a\":0,\"timestamp_b\":0}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"x\",\"q\":1}],\"new_from_a\":[{\"sku\":\"x\",\"q\":1},{\"sku\":\"y\",\"q\":2}],\"new_from_b\":[{\"sku\":\"x\",\"q\":1},{\"sku\":\"z\",\"q\":3}],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[{\"q\":1,\"sku\":\"x\"},{\"q\":2,\"sku\":\"y\"},{\"q\":3,\"sku\":\"z\"}]}",
+      "isErr": false,
+      "name": "set-by-key-additions-both-sides-merge",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\"}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"x\",\"q\":1}],\"new_from_a\":[{\"sku\":\"x\",\"q\":10}],\"new_from_b\":[{\"sku\":\"x\",\"q\":20}],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Conflict\",\"reason\":\"element 'x' changed on both sides\"}",
+      "isErr": false,
+      "name": "set-by-key-both-changed-conflict",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\"}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"old\",\"id\":1,\"q\":5}],\"new_from_a\":[{\"sku\":\"new\",\"id\":1,\"q\":5}],\"new_from_b\":[{\"sku\":\"old\",\"id\":1,\"q\":5}],\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[{\"id\":1,\"q\":5,\"sku\":\"new\"}]}",
+      "isErr": false,
+      "name": "set-by-key-anchor-rehomes-renamed-identity",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"id\",\"b_anchor\":\"id\"}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"x\",\"q\":1}],\"new_from_a\":[{\"sku\":\"x\",\"q\":1,\"a_extra\":true}],\"new_from_b\":[{\"sku\":\"x\",\"q\":1,\"b_extra\":42}],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[{\"a_extra\":true,\"b_extra\":42,\"q\":1,\"sku\":\"x\"}]}",
+      "isErr": false,
+      "name": "set-by-key-on-both-changed-union-merges-fields",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\",\"on_both_changed\":\"Union\"}"
+    },
+    {
+      "change": "{\"path\":\"groups\",\"old_value\":[{\"gid\":\"G1\",\"items\":[{\"sku\":\"A\",\"q\":1}]}],\"new_from_a\":[{\"gid\":\"G1\",\"items\":[{\"sku\":\"A\",\"q\":1},{\"sku\":\"B\",\"q\":2}]}],\"new_from_b\":[{\"gid\":\"G1\",\"items\":[{\"sku\":\"A\",\"q\":1},{\"sku\":\"C\",\"q\":3}]}],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[{\"gid\":\"G1\",\"items\":[{\"q\":1,\"sku\":\"A\"},{\"q\":2,\"sku\":\"B\"},{\"q\":3,\"sku\":\"C\"}]}]}",
+      "isErr": false,
+      "name": "set-by-key-on-both-changed-union-with-nested-merges-recursively",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"gid\"],\"a_anchor\":\"gid\",\"b_anchor\":\"gid\",\"on_both_changed\":\"Union\",\"nested\":{\"items\":{\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\"}}}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"x\",\"q\":1}],\"new_from_a\":[{\"sku\":\"x\",\"q\":10}],\"new_from_b\":[{\"sku\":\"x\",\"q\":20}],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[{\"q\":10,\"sku\":\"x\"}]}",
+      "isErr": false,
+      "name": "set-by-key-on-both-changed-prefer-a-wins",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\",\"on_both_changed\":\"PreferA\"}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"x\",\"q\":1}],\"new_from_a\":[{\"sku\":\"x\",\"q\":10}],\"new_from_b\":[{\"sku\":\"x\",\"q\":20}],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[{\"q\":20,\"sku\":\"x\"}]}",
+      "isErr": false,
+      "name": "set-by-key-on-both-changed-prefer-b-wins",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\",\"on_both_changed\":\"PreferB\"}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"x\"}],\"new_from_a\":[{\"sku\":\"x\"},{\"sku\":\"y\"}],\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[{\"sku\":\"x\"}]}",
+      "isErr": false,
+      "name": "set-by-key-on-added-in-a-exclude-drops-addition",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\",\"on_added_in_a\":\"Exclude\"}"
+    },
+    {
+      "change": "{\"path\":\"items\",\"old_value\":[{\"sku\":\"x\",\"q\":1}],\"new_from_a\":[],\"new_from_b\":[{\"sku\":\"x\",\"q\":99}],\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"kind\":\"Resolved\",\"value\":[]}",
+      "isErr": false,
+      "name": "set-by-key-on-removed-in-a-remove-drops-without-escalating",
+      "policyRef": "{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\",\"on_removed_in_a\":\"Remove\"}"
+    },
+    {
+      "change": "{bad",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "invalid change JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-change-json",
+      "policyRef": "{\"kind\":\"additive\"}"
+    },
+    {
+      "change": "{\"path\":\"x\",\"old_value\":1,\"new_from_a\":2,\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "invalid policy_ref JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-policy-ref-json",
+      "policyRef": "{bad"
+    },
+    {
+      "change": "{\"path\":\"x\",\"old_value\":1,\"new_from_a\":2,\"source\":\"a\"}",
+      "ctx": "{bad",
+      "expected": "invalid ctx JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-ctx-json",
+      "policyRef": "{\"kind\":\"additive\"}"
+    },
+    {
+      "change": "{\"path\":\"s\",\"old_value\":\"draft\",\"new_from_b\":\"open\",\"source\":\"a\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "inconsistent change: source 'a' but new_from_a is absent",
+      "isErr": true,
+      "name": "inconsistent-source-a-with-absent-new-from-a",
+      "policyRef": "{\"kind\":\"state_machine\",\"transitions\":[{\"from\":\"draft\",\"to\":\"open\"}]}"
+    },
+    {
+      "change": "{\"path\":\"s\",\"old_value\":\"draft\",\"new_from_a\":\"open\",\"source\":\"b\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "inconsistent change: source 'b' but new_from_b is absent",
+      "isErr": true,
+      "name": "inconsistent-source-b-with-absent-new-from-b",
+      "policyRef": "{\"kind\":\"state_machine\",\"transitions\":[{\"from\":\"draft\",\"to\":\"open\"}]}"
+    },
+    {
+      "change": "{\"path\":\"qty\",\"old_value\":1,\"new_from_a\":3,\"source\":\"both\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "inconsistent change: source 'both' but new_from_b is absent",
+      "isErr": true,
+      "name": "inconsistent-source-both-with-absent-new-from-b",
+      "policyRef": "{\"kind\":\"additive\"}"
+    }
+  ],
+  "threeWayDiff": [
+    {
+      "a": "{\"price\":10,\"qty\":5}",
+      "ancestor": "{\"price\":10,\"qty\":5}",
+      "b": "{\"price\":10,\"qty\":5}",
+      "expected": "{\"changes\":[]}",
+      "isErr": false,
+      "name": "no-change"
+    },
+    {
+      "a": "{\"price\":12}",
+      "ancestor": "{\"price\":10}",
+      "b": "{\"price\":10}",
+      "expected": "{\"changes\":[{\"path\":\"price\",\"old_value\":10,\"new_from_a\":12,\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "a-only-change"
+    },
+    {
+      "a": "{\"price\":10}",
+      "ancestor": "{\"price\":10}",
+      "b": "{\"price\":15}",
+      "expected": "{\"changes\":[{\"path\":\"price\",\"old_value\":10,\"new_from_b\":15,\"source\":\"b\"}]}",
+      "isErr": false,
+      "name": "b-only-change"
+    },
+    {
+      "a": "{\"price\":12}",
+      "ancestor": "{\"price\":10}",
+      "b": "{\"price\":12}",
+      "expected": "{\"changes\":[{\"path\":\"price\",\"old_value\":10,\"new_from_a\":12,\"new_from_b\":12,\"source\":\"both\"}]}",
+      "isErr": false,
+      "name": "both-sides-agree"
+    },
+    {
+      "a": "{\"price\":12}",
+      "ancestor": "{\"price\":10}",
+      "b": "{\"price\":15}",
+      "expected": "{\"changes\":[{\"path\":\"price\",\"old_value\":10,\"new_from_a\":12,\"new_from_b\":15,\"source\":\"both\"}]}",
+      "isErr": false,
+      "name": "both-sides-conflict"
+    },
+    {
+      "a": "{\"status\":null,\"other\":\"x\"}",
+      "ancestor": "{\"status\":\"draft\",\"other\":\"x\"}",
+      "b": "{\"status\":\"draft\",\"other\":\"x\"}",
+      "expected": "{\"changes\":[{\"path\":\"status\",\"old_value\":\"draft\",\"new_from_a\":null,\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "null-clear-explicit"
+    },
+    {
+      "a": "{\"other\":\"x\"}",
+      "ancestor": "{\"status\":\"draft\",\"other\":\"x\"}",
+      "b": "{\"status\":\"draft\",\"other\":\"x\"}",
+      "expected": "{\"changes\":[{\"path\":\"status\",\"old_value\":\"draft\",\"new_from_a\":null,\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "null-clear-via-key-deletion"
+    },
+    {
+      "a": "{\"pricing\":{\"amount\":12,\"currency\":\"usd\"}}",
+      "ancestor": "{\"pricing\":{\"amount\":10,\"currency\":\"usd\"}}",
+      "b": "{\"pricing\":{\"amount\":10,\"currency\":\"usd\"}}",
+      "expected": "{\"changes\":[{\"path\":\"pricing.amount\",\"old_value\":10,\"new_from_a\":12,\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "nested-object-path"
+    },
+    {
+      "a": "{\"a\":{\"b\":{\"c\":2}}}",
+      "ancestor": "{\"a\":{\"b\":{\"c\":1}}}",
+      "b": "{\"a\":{\"b\":{\"c\":1}}}",
+      "expected": "{\"changes\":[{\"path\":\"a.b.c\",\"old_value\":1,\"new_from_a\":2,\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "deep-nested-path"
+    },
+    {
+      "a": "{\"tags\":[\"a\",\"c\"]}",
+      "ancestor": "{\"tags\":[\"a\",\"b\"]}",
+      "b": "{\"tags\":[\"a\",\"b\"]}",
+      "expected": "{\"changes\":[{\"path\":\"tags\",\"old_value\":[\"a\",\"b\"],\"new_from_a\":[\"a\",\"c\"],\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "array-value-replacement"
+    },
+    {
+      "a": "{\"new_field\":\"x\"}",
+      "ancestor": "{}",
+      "b": "{}",
+      "expected": "{\"changes\":[{\"path\":\"new_field\",\"old_value\":null,\"new_from_a\":\"x\",\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "empty-ancestor"
+    },
+    {
+      "a": "{\"名前\":\"次郎\"}",
+      "ancestor": "{\"名前\":\"太郎\"}",
+      "b": "{\"名前\":\"太郎\"}",
+      "expected": "{\"changes\":[{\"path\":\"名前\",\"old_value\":\"太郎\",\"new_from_a\":\"次郎\",\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "unicode-keys-and-values"
+    },
+    {
+      "a": "{\"a\":10,\"b\":2,\"c\":3}",
+      "ancestor": "{\"a\":1,\"b\":2,\"c\":3}",
+      "b": "{\"a\":1,\"b\":20,\"c\":3}",
+      "expected": "{\"changes\":[{\"path\":\"a\",\"old_value\":1,\"new_from_a\":10,\"source\":\"a\"},{\"path\":\"b\",\"old_value\":2,\"new_from_b\":20,\"source\":\"b\"}]}",
+      "isErr": false,
+      "name": "multi-field-mixed-sources-untouched-field-omitted"
+    },
+    {
+      "a": "{}",
+      "ancestor": "{bad",
+      "b": "{}",
+      "expected": "invalid ancestor JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-ancestor-json"
+    },
+    {
+      "a": "{bad",
+      "ancestor": "{}",
+      "b": "{}",
+      "expected": "invalid a JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-a-json"
+    },
+    {
+      "a": "{}",
+      "ancestor": "{}",
+      "b": "{bad",
+      "expected": "invalid b JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-b-json"
+    }
+  ],
+  "transformToCif": [
+    {
+      "expected": "{\"product_name\":\"Widget\",\"product_price\":19.99}",
+      "formatId": "format_a",
+      "isErr": false,
+      "name": "scalar-mapping",
+      "schema": "{\"cif_schema\":{\"product_name\":{\"type\":\"string\",\"required\":true},\"product_price\":{\"type\":\"number\",\"required\":true}},\"transformations\":{\"format_a\":{\"product_name\":{\"source_path\":\"name\",\"type\":\"string\"},\"product_price\":{\"source_path\":\"price\",\"type\":\"number\"}}}}",
+      "source": "{\"name\":\"Widget\",\"price\":19.99}"
+    },
+    {
+      "expected": "{\"product_name\":\"Gadget\",\"product_price\":99.99}",
+      "formatId": "nested_format",
+      "isErr": false,
+      "name": "nested-dotted-source-path",
+      "schema": "{\"cif_schema\":{\"product_name\":{\"type\":\"string\",\"required\":true},\"product_price\":{\"type\":\"number\",\"required\":true}},\"transformations\":{\"nested_format\":{\"product_name\":{\"source_path\":\"product.details.name\",\"type\":\"string\"},\"product_price\":{\"source_path\":\"pricing.amount\",\"type\":\"number\"}}}}",
+      "source": "{\"product\":{\"details\":{\"name\":\"Gadget\"}},\"pricing\":{\"amount\":99.99}}"
+    },
+    {
+      "expected": "{\"is_active\":true,\"product_id\":\"12345\",\"stock\":100.0}",
+      "formatId": "format_b",
+      "isErr": false,
+      "name": "type-conversion",
+      "schema": "{\"cif_schema\":{\"product_id\":{\"type\":\"string\",\"required\":true},\"is_active\":{\"type\":\"boolean\",\"required\":true},\"stock\":{\"type\":\"number\",\"required\":true}},\"transformations\":{\"format_b\":{\"product_id\":{\"source_path\":\"id\",\"type\":\"string\"},\"is_active\":{\"source_path\":\"active\",\"type\":\"boolean\"},\"stock\":{\"source_path\":\"quantity\",\"type\":\"number\"}}}}",
+      "source": "{\"id\":\"12345\",\"active\":\"true\",\"quantity\":\"100\"}"
+    },
+    {
+      "expected": "{\"items\":[{\"externalId\":\"A-1\",\"qty\":3,\"sku\":\"SKU-X\"},{\"externalId\":\"A-2\",\"qty\":5,\"sku\":\"SKU-Y\"}]}",
+      "formatId": "erp",
+      "isErr": false,
+      "name": "array-elements-with-anchors",
+      "schema": "{\"cif_schema\":{\"items\":{\"type\":\"array\",\"required\":true,\"element\":{\"externalId\":{\"type\":\"string\",\"anchor\":\"a\"},\"internalId\":{\"type\":\"string\",\"anchor\":\"b\"},\"sku\":{\"type\":\"string\",\"required\":true},\"qty\":{\"type\":\"number\"}}}},\"transformations\":{\"erp\":{\"items\":{\"source_path\":\"lineItems\",\"type\":\"array\",\"element\":{\"externalId\":{\"source_path\":\"extId\",\"type\":\"string\"},\"sku\":{\"source_path\":\"sku\",\"type\":\"string\"},\"qty\":{\"source_path\":\"quantity\",\"type\":\"number\"}}}}}}",
+      "source": "{\"lineItems\":[{\"extId\":\"A-1\",\"sku\":\"SKU-X\",\"quantity\":3},{\"extId\":\"A-2\",\"sku\":\"SKU-Y\",\"quantity\":5}]}"
+    },
+    {
+      "expected": "required element field 'items.sku' missing at source_path 'sku'",
+      "formatId": "erp",
+      "isErr": true,
+      "name": "array-element-required-field-missing",
+      "schema": "{\"cif_schema\":{\"items\":{\"type\":\"array\",\"element\":{\"sku\":{\"type\":\"string\",\"required\":true}}}},\"transformations\":{\"erp\":{\"items\":{\"source_path\":\"lineItems\",\"type\":\"array\",\"element\":{\"sku\":{\"source_path\":\"sku\",\"type\":\"string\"}}}}}}",
+      "source": "{\"lineItems\":[{\"sku\":\"SKU-X\"},{}]}"
+    },
+    {
+      "expected": "{\"supplier\":{\"email\":\"a@acme.io\",\"name\":\"Acme\"}}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "object-children-nested-cif-object",
+      "schema": "{\"cif_schema\":{\"supplier\":{\"type\":\"object\",\"required\":true,\"children\":{\"name\":{\"type\":\"string\",\"required\":true},\"email\":{\"type\":\"string\"}}}},\"transformations\":{\"f\":{\"supplier\":{\"source_path\":\"vendor\",\"type\":\"object\",\"children\":{\"name\":{\"source_path\":\"companyName\",\"type\":\"string\"},\"email\":{\"source_path\":\"contact.email\",\"type\":\"string\"}}}}}}",
+      "source": "{\"vendor\":{\"companyName\":\"Acme\",\"contact\":{\"email\":\"a@acme.io\"}}}"
+    },
+    {
+      "expected": "required children field 'supplier.name' missing at source_path 'companyName'",
+      "formatId": "f",
+      "isErr": true,
+      "name": "required-object-child-missing",
+      "schema": "{\"cif_schema\":{\"supplier\":{\"type\":\"object\",\"children\":{\"name\":{\"type\":\"string\",\"required\":true}}}},\"transformations\":{\"f\":{\"supplier\":{\"source_path\":\"vendor\",\"type\":\"object\",\"children\":{\"name\":{\"source_path\":\"companyName\",\"type\":\"string\"}}}}}}",
+      "source": "{\"vendor\":{}}"
+    },
+    {
+      "expected": "{\"net_suite\":{\"id\":\"42\"}}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "top-level-source-path-dot",
+      "schema": "{\"cif_schema\":{\"net_suite\":{\"type\":\"object\",\"children\":{\"id\":{\"type\":\"string\"}}}},\"transformations\":{\"f\":{\"net_suite\":{\"source_path\":\".\",\"type\":\"object\",\"children\":{\"id\":{\"source_path\":\"id\",\"type\":\"string\"}}}}}}",
+      "source": "{\"id\":\"42\",\"other\":true}"
+    },
+    {
+      "expected": "{\"meta\":{\"raw\":\"urgent\"}}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "object-child-source-path-dot",
+      "schema": "{\"cif_schema\":{\"meta\":{\"type\":\"object\",\"children\":{\"raw\":{\"type\":\"string\"}}}},\"transformations\":{\"f\":{\"meta\":{\"source_path\":\"tag\",\"type\":\"object\",\"children\":{\"raw\":{\"source_path\":\".\",\"type\":\"string\"}}}}}}",
+      "source": "{\"tag\":\"urgent\"}"
+    },
+    {
+      "expected": "{\"items\":[{\"dimensions\":{\"height\":3,\"width\":2},\"sku\":\"X\"}],\"supplier\":{\"addresses\":[{\"city\":\"Oslo\"},{\"city\":\"Bergen\"}],\"name\":\"Acme\"}}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "array-of-objects-with-nested-children-composing",
+      "schema": "{\"cif_schema\":{\"items\":{\"type\":\"array\",\"element\":{\"sku\":{\"type\":\"string\"},\"dimensions\":{\"type\":\"object\",\"children\":{\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"}}}}},\"supplier\":{\"type\":\"object\",\"children\":{\"name\":{\"type\":\"string\"},\"addresses\":{\"type\":\"array\",\"element\":{\"city\":{\"type\":\"string\"}}}}}},\"transformations\":{\"f\":{\"items\":{\"source_path\":\"lines\",\"type\":\"array\",\"element\":{\"sku\":{\"source_path\":\"sku\",\"type\":\"string\"},\"dimensions\":{\"source_path\":\"dims\",\"type\":\"object\",\"children\":{\"width\":{\"source_path\":\"w\",\"type\":\"number\"},\"height\":{\"source_path\":\"h\",\"type\":\"number\"}}}}},\"supplier\":{\"source_path\":\"vendor\",\"type\":\"object\",\"children\":{\"name\":{\"source_path\":\"name\",\"type\":\"string\"},\"addresses\":{\"source_path\":\"addrs\",\"type\":\"array\",\"element\":{\"city\":{\"source_path\":\"city\",\"type\":\"string\"}}}}}}}}",
+      "source": "{\"lines\":[{\"sku\":\"X\",\"dims\":{\"w\":2,\"h\":3}}],\"vendor\":{\"name\":\"Acme\",\"addrs\":[{\"city\":\"Oslo\"},{\"city\":\"Bergen\"}]}}"
+    },
+    {
+      "expected": "{\"orders\":[{\"id\":\"o1\",\"lines\":[{\"sku\":\"a\"},{\"sku\":\"b\"}]},{\"id\":\"o2\",\"lines\":[{\"sku\":\"c\"}]}]}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "nested-arrays-of-objects",
+      "schema": "{\"cif_schema\":{\"orders\":{\"type\":\"array\",\"element\":{\"id\":{\"type\":\"string\"},\"lines\":{\"type\":\"array\",\"element\":{\"sku\":{\"type\":\"string\"}}}}}},\"transformations\":{\"f\":{\"orders\":{\"source_path\":\"orders\",\"type\":\"array\",\"element\":{\"id\":{\"source_path\":\"id\",\"type\":\"string\"},\"lines\":{\"source_path\":\"lines\",\"type\":\"array\",\"element\":{\"sku\":{\"source_path\":\"sku\",\"type\":\"string\"}}}}}}}}",
+      "source": "{\"orders\":[{\"id\":\"o1\",\"lines\":[{\"sku\":\"a\"},{\"sku\":\"b\"}]},{\"id\":\"o2\",\"lines\":[{\"sku\":\"c\"}]}]}"
+    },
+    {
+      "expected": "Format 'nonexistent_format' not found in schema",
+      "formatId": "nonexistent_format",
+      "isErr": true,
+      "name": "unknown-format",
+      "schema": "{\"cif_schema\":{},\"transformations\":{\"format_a\":{}}}",
+      "source": "{\"name\":\"Widget\"}"
+    },
+    {
+      "expected": "'cif_schema' not defined in schema",
+      "formatId": "f",
+      "isErr": true,
+      "name": "missing-cif-schema",
+      "schema": "{\"transformations\":{\"f\":{}}}",
+      "source": "{}"
+    }
+  ]
+}

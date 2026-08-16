@@ -1,5 +1,8 @@
 # diff-fusion architecture
 
+> This document describes the Rust crate. File paths are relative to
+> `src/` (e.g. `src/domain/…` means `src/src/domain/…`).
+
 This document is the map. For *why* the design is shaped this way, read
 `App.md`. For *how to work inside the code*, read `New claude.md`. This
 file tells you where things live and how they fit together.
@@ -18,6 +21,7 @@ file tells you where things live and how they fit together.
 - [§ 08 — Extension points](#-08--extension-points)
 - [§ 09 — Non-negotiable invariants](#-09--non-negotiable-invariants)
 - [§ 10 — Vocabulary](#-10--vocabulary)
+- [§ 11 — Scaling: multiple systems and atomicity](#-11--scaling-multiple-systems-and-atomicity)
 
 ---
 
@@ -127,7 +131,8 @@ src/
 ├─ drivers/             User-facing entry points
 │  ├─ sync_engine.rs    SyncEngine facade (Tier-1 API)
 │  ├─ facade.rs         DiffFusion (Tier-0 detection-only API)
-│  └─ cli.rs            Clap argument parsing
+│  ├─ cli.rs            Clap argument parsing
+│  └─ wasm.rs           WASM kernel boundary driver
 │
 ├─ lib.rs               Module tree + crate-root re-exports
 └─ main.rs              Binary entry point
@@ -148,12 +153,19 @@ ergonomics, not canonical API.
 
 ```
 tests/integration/
-├─ transform_tests.rs    Schema-driven transformation
-├─ compare_tests.rs      Two-way diff primitive
-├─ end_to_end_tests.rs   Transform + compare facade flow
-├─ contract_tests.rs     Shared SystemPort contract suite
-└─ sync_cycle_tests.rs   Full orchestrator cycle (7 tests)
+├─ transform_tests.rs            Schema-driven transformation
+├─ compare_tests.rs              Two-way diff primitive
+├─ end_to_end_tests.rs           Transform + compare facade flow
+├─ contract_tests.rs             Shared SystemPort contract suite
+├─ sync_cycle_tests.rs           Full orchestrator cycle
+├─ sync_engine_facade_tests.rs   Public SyncEngine API (no internal types leak)
+├─ partial_push_failure_tests.rs Self-healing under partial write failure
+└─ filesystem_ancestor_tests.rs  Durable ancestor store (atomic writes, hashed paths)
 ```
+
+The full suite (lib unit tests + 8 integration files + doctests) must
+report **0 failed, 0 ignored**. An ignored test is dead code — either fix
+it or delete it.
 
 ---
 
@@ -468,6 +480,37 @@ Three common "how do I add ___?" answers.
    `ancestor.rs` / `escalation.rs` into `adapters/in_memory_stores.rs`
    so only the trait lives at the port level.
 
+### Capture a snapshot for analysis
+
+The `Observer` trait in `ports::observer` accepts a single `Capture`
+payload — both sides' canonical views (plus system names, version, and
+the `(entity_type, canonical_id)` keys) for one entity at one point in
+time. The trait carries no transport dependencies, so implementations
+are free to log, ship over HTTP, or write to disk.
+
+The capture path is decoupled from the reconciliation pipeline:
+`application::capture::capture` snapshots both sides via `SystemPort`
+without running diff/resolve/push. The orchestrator runs the pipeline
+when called explicitly and is no longer involved in observation.
+
+The `diff_fusion_observe` companion crate ships an `HttpObserver` that
+POSTs the capture to a playground:
+
+```rust
+let observer: Arc<dyn Observer> = Arc::new(
+    HttpObserver::new("http://localhost:3000", "demo-1"),
+);
+diff_fusion::application::capture::capture(&side_a, &side_b, "po", "PO-1", &*observer).await?;
+```
+
+The playground (`playground/`) saves captures at
+`POST /api/captures/:capture_id`, lists them at `GET /api/captures`, and
+serves a single capture at `GET /api/captures/:capture_id`. Saved
+captures appear in the UI's Captures panel; clicking one loads it into
+the demo form so the user can run the pipeline interactively. Captures
+are in-memory only and evict after an idle window. See
+`examples/observe_demo.rs` for a full end-to-end run.
+
 ---
 
 ## § 09 — Non-negotiable invariants
@@ -555,6 +598,125 @@ writing code, prefer these over synonyms.
 | **Escalation** | Routing unresolved conflicts to human review | "manual intervention", "fallback" |
 | **Cycle** | One pass of pull → diff → resolve → push → commit-ancestor | |
 | **Shadow mode** | Running a cycle without pushing or advancing the ancestor | "dry run" |
+
+---
+
+## § 11 — Scaling: multiple systems and atomicity
+
+Two questions that come up repeatedly — "how many systems can this handle?"
+and "what about concurrency?" — share one answer: **the library stays
+pure, infrastructure does the rest**. This section documents the split so
+it is reviewable, not just folklore.
+
+### 11.1 More than two systems — hub-and-spoke through the CIF
+
+A single `SyncEngine` cycle reconciles **two parties plus their shared
+ancestor** (the "three" in three-way diff is `ancestor + A + B`, not three
+systems). That is the unit of work, not a cap on total system count.
+
+The CIF is a *canonical* format — every system's data converges there and
+nowhere else. That means N-system topologies are hub-and-spoke, not mesh:
+
+```
+  System A ─┐
+  System B ─┼─► CIF hub (ancestor store) ◄─── System D
+  System C ─┘                             ◄─── System E
+```
+
+Each spoke is one `SyncEngine::builder(spoke_adapter, hub_adapter)` running
+pairwise against the hub. Systems never meet each other directly.
+
+**Cost of adding a system:**
+
+| Change | Where |
+|---|---|
+| One `transformations.<name>` block mapping raw shape to CIF | Schema JSON (data, no code) |
+| One `SystemPort` impl if the I/O shape is new (otherwise reuse) | `src/adapters/<name>.rs` |
+| One more `SyncEngine` instance wiring the spoke to the hub | Composition root |
+| **Nothing else** | Domain, policies, diff, orchestrator untouched |
+
+Growth is O(1) per system. The N² pairwise-transformer explosion that would
+come from systems talking to each other directly is what the CIF choice
+averts.
+
+### 11.2 What hub-and-spoke does NOT give you
+
+The library cannot, today, atomically reconcile edits from three or more
+systems in a single merge step. Concretely: the core types assume two new
+sides and one ancestor.
+
+```rust
+MergeContext { system_a, system_b }                    // two labels
+FieldChange  { old_value, new_from_a, new_from_b }     // two new values
+SetByKey     { a_anchor, b_anchor,
+               on_added_in_a, on_added_in_b,
+               on_removed_in_a, on_removed_in_b, ... } // two-sided everywhere
+three_way_diff(ancestor, a, b)                         // base + two sides
+```
+
+You resolve three systems by running three pairwise cycles against the
+hub, not by merging three sides in one atomic shot. For "majority wins
+across systems" semantics or "all must converge before commit," you would
+have to generalise `FieldChange` to carry N new values and rewrite the
+resolver. That work is **not scoped** today; see ROADMAP.md if it becomes
+needed.
+
+### 11.3 The library vs. infrastructure split
+
+Concurrency — distributed locks, transactions, ordered queues — is a
+deployment concern and is **deliberately outside the library**. Baking it
+in would force one concurrency primitive on every user and fight any
+infra that already provides serialisation guarantees.
+
+**What the library owns (correctness, not concurrency):**
+
+- Pure three-way diff, policy resolution, and push ordering.
+- **Deterministic idempotency keys** (`src/domain/idempotency.rs`) —
+  `hash(canonical_id + op + payload)` — so infrastructure can dedupe
+  replays without the library knowing how.
+- **Ancestor-last commit order**: compute → push to stale sides → wait for
+  confirmations → commit ancestor. Any reordering breaks cycle coherence;
+  see § 09 invariant #4.
+- **Port traits** (`SystemPort`, `AncestorStore`, `EscalationQueue`) that
+  expose exactly the surface infrastructure needs to serialise correctly.
+
+**What infrastructure owns:**
+
+| Concern | Typical deployment solution |
+|---|---|
+| Only one sync cycle per entity at a time | Redis `SET NX` lock keyed by `entity:id`, or per-entity queue consumer (Kafka partition key, SQS FIFO group) |
+| Stale-ancestor writes (two cycles race both push) | Optimistic concurrency inside `AncestorStore` — version column, CAS, `UPDATE ... WHERE version = ?` |
+| Duplicate retries after network blips | Dedup on the library-provided idempotency key at the queue or the `SystemPort` |
+| Cross-system atomicity on push | Saga / outbox pattern inside the `SystemPort` adapter |
+| Rate limits, backoff, circuit breaking | `SystemPort` adapter wrapper |
+
+### 11.4 The one concurrency rule the library does enforce
+
+`AncestorStore::put` **must be a serialisation point**: two successful
+puts against the same `(entity_type, canonical_id)` with the same
+"expected previous" version must not both win. The *implementation* (CAS,
+lock, transaction, conditional write — whichever the backing store
+offers) is the adapter's job.
+
+In-memory and filesystem adapters satisfy this trivially on a single
+node. A real multi-node deployment backs `AncestorStore` with
+Postgres-with-version-column, DynamoDB conditional writes, or Redis with
+CAS, and gets correctness for free.
+
+### 11.5 Mental model
+
+> **Library:** "Here is a pure merge and a stable idempotency key. You
+> serialise the writes."
+>
+> **Infrastructure:** "Lock / version / queue / transaction — whichever
+> matches my stack."
+
+This is the same split the hexagonal design enforces throughout:
+behaviour that varies per deployment (I/O, concurrency, persistence) sits
+behind a port; behaviour that is invariant to deployment (diff semantics,
+policy rules, idempotency derivation) sits in the core. Reviewers should
+reject any PR that puts a distributed lock, a database transaction, or a
+retry loop inside `domain/` or `application/`.
 
 ---
 

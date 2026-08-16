@@ -1,0 +1,80 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+      - name: Build rustdoc
+        working-directory: src
+        run: cargo doc --no-deps -p diff_fusion
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: Build typedoc
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          # Installed into the project's own node_modules (not npx's isolated
+          # cache) so typedoc resolves this package's typescript and
+          # @types/node. --no-save keeps package.json and the lockfile clean.
+          npm i --no-save typedoc@0.28.20
+          npx typedoc
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: docs
+
+      - name: Fold root docs into the site
+        run: ./scripts/fold-root-docs.sh
+
+      - name: Build site
+        working-directory: docs
+        env:
+          JEKYLL_ENV: production
+        run: bundle exec jekyll build
+
+      - name: Merge generated API docs into the site
+        run: |
+          mkdir -p docs/_site/api
+          cp -r src/target/doc docs/_site/api/rust
+          cp -r sdk/typescript/docs-api docs/_site/api/ts
+          printf '<meta http-equiv="refresh" content="0;url=diff_fusion/index.html">\n' > docs/_site/api/rust/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

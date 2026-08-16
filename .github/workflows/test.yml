@@ -1,0 +1,98 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      - name: cargo test
+        working-directory: src
+        run: cargo test
+
+  ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+
+      - name: npm test
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm test
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          cache-dependency-path: sdk/golang/go.sum
+
+      - name: go test
+        working-directory: sdk/golang
+        run: go test ./...
+
+  # The committed .wasm artifacts (sdk/typescript/wasm/diff_fusion_bg.wasm,
+  # sdk/golang/kernel/diff_fusion.wasm) can silently go stale when the Rust
+  # kernel changes. Rebuild them and re-run the TS/Go suites against the
+  # fresh build to verify semantic freshness (wasm builds aren't guaranteed
+  # byte-reproducible, so we don't diff the bytes).
+  wasm-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,wasm32-wasip1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      # Pinned to match the `wasm-bindgen = "=0.2.100"` crate dependency in
+      # src/Cargo.toml — build-wasm.sh itself verifies this and fails loudly
+      # on a mismatch.
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.100
+
+      - name: Rebuild wasm artifacts
+        run: |
+          ./scripts/build-wasm.sh
+          ./scripts/build-wasm-wasip1.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: npm test against rebuilt wasm
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm test
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          cache-dependency-path: sdk/golang/go.sum
+      - name: go test against rebuilt wasm
+        working-directory: sdk/golang
+        run: go test ./...

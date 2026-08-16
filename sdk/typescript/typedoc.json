@@ -1,0 +1,9 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src"],
+  "entryPointStrategy": "expand",
+  "out": "docs-api",
+  "readme": "none",
+  "name": "diff-fusion-ts",
+  "excludeInternal": true
+}

@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to diff-fusion! This document outlines our coding principles, architectural guidelines, and development practices.
 
+> The Rust crate lives in `src/` — file paths and `cargo` commands in this
+> document are relative to that directory. The TypeScript SDK is `sdk/typescript/`,
+> the Go SDK `sdk/golang/`; the cross-language contract lives in `spec/`.
+
 ## 🎯 Project Mission
 
 **Core Focus**: A unified JSON transformation and conflict detection library that solves the n(n-1)/2 integration problem using Common Intermediate Format (CIF).
@@ -317,9 +321,14 @@ pub fn compare_json(...) {
 
 ### Before Submitting
 
-1. **Run tests**: `cargo test`
+1. **Run tests**: `cargo test` — must be **0 failed, 0 ignored**. An ignored
+   test is dead code; either fix it or delete it. `rust,ignore` doctests
+   count too — make them runnable (use `# ` to hide setup lines) or drop
+   the fence.
 2. **Check formatting**: `cargo fmt`
-3. **Run linter**: `cargo clippy`
+3. **Run linter**: `cargo clippy --all-targets` — must be **0 warnings**.
+   If a warning is a false positive, silence it locally with
+   `#[allow(clippy::lint_name)]` and a one-line WHY comment.
 4. **Build release**: `cargo build --release`
 5. **Update docs**: Document any API changes
 
@@ -366,9 +375,9 @@ test: add edge cases for type conversion
 - [ ] Is the public API documented?
 - [ ] Does it handle errors properly?
 - [ ] Is it backwards compatible?
-- [ ] Does `cargo clippy` pass?
+- [ ] Does `cargo clippy --all-targets` pass with **0 warnings**?
 - [ ] Does `cargo fmt` pass?
-- [ ] Does `cargo test` pass?
+- [ ] Does `cargo test` pass with **0 failed, 0 ignored**?
 
 ## 💡 Design Decisions
 

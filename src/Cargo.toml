@@ -1,0 +1,87 @@
+[workspace]
+members = ["playground", "crates/observe"]
+
+[package]
+edition = "2024"
+name = "diff_fusion"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "diff_fusion"
+path = "src/lib.rs"
+
+[[bin]]
+name = "diff-fusion"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1.89"
+blake3 = "1.8.4"
+clap = {version = "4", features = ["derive"]}
+colored = "3"
+schemars = {version = "0.8", optional = true}
+serde = {version = "1", features = ["derive"]}
+serde_json = "1"
+thiserror = "2.0.18"
+
+[features]
+schema-gen = ["dep:schemars"]
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wasm-bindgen = "=0.2.100"
+
+[[example]]
+name = "gen_schema"
+path = "examples/gen_schema.rs"
+required-features = ["schema-gen"]
+
+# Integration tests - each file is a separate test target
+[[test]]
+name = "transform_tests"
+path = "tests/integration/transform_tests.rs"
+
+[[test]]
+name = "compare_tests"
+path = "tests/integration/compare_tests.rs"
+
+[[test]]
+name = "end_to_end_tests"
+path = "tests/integration/end_to_end_tests.rs"
+
+[[test]]
+name = "contract_tests"
+path = "tests/integration/contract_tests.rs"
+
+[[test]]
+name = "sync_cycle_tests"
+path = "tests/integration/sync_cycle_tests.rs"
+
+[[test]]
+name = "sync_engine_facade_tests"
+path = "tests/integration/sync_engine_facade_tests.rs"
+
+[[test]]
+name = "partial_push_failure_tests"
+path = "tests/integration/partial_push_failure_tests.rs"
+
+[[test]]
+name = "filesystem_ancestor_tests"
+path = "tests/integration/filesystem_ancestor_tests.rs"
+
+[[test]]
+name = "observer_tests"
+path = "tests/integration/observer_tests.rs"
+
+[[test]]
+name = "policy_store_tests"
+path = "tests/integration/policy_store_tests.rs"
+
+[[test]]
+name = "kernel_vectors_tests"
+path = "tests/kernel_vectors_tests.rs"
+
+[dev-dependencies]
+proptest = "1.11.0"
+tokio = { version = "1.52.1", features = ["rt", "macros", "time", "sync", "rt-multi-thread"] }
+diff_fusion_observe = { path = "crates/observe" }

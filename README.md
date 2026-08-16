@@ -14,6 +14,17 @@ JSON diff without the reconciliation machinery.
 
 > **Name Explained:** "fusion" = fusing different formats into CIF for comparison, not merging/syncing data blindly.
 
+## Repository layout
+
+Three delivery packages share one Rust kernel (see `ROADMAP.md`):
+
+- `src/` — the Rust crate (kernel SSOT + full library). All `cargo`
+  commands in this document run from `src/`.
+- `sdk/typescript/` — npm package, kernel delivered via wasm-bindgen (`sdk/typescript/wasm/`).
+- `sdk/golang/` — Go module, kernel delivered via wasm32-wasip1 + wazero.
+- `spec/` — cross-language contract: golden vectors + boundary JSON Schema.
+- `scripts/` — artifact build scripts (`build-wasm.sh`, `build-wasm-wasip1.sh`).
+
 ## What This Library Does
 
 ```
@@ -38,6 +49,7 @@ System B ─▶ Canonical ─┘          │
 - ✅ Durable filesystem-backed ancestor store (`adapters::filesystem_ancestor`)
 - ✅ `SyncEngine` facade — one builder, no `Arc<dyn …>` ceremony; full layered module tree (`domain / application / ports / adapters / drivers`)
 - ✅ The detection-only facade (`DiffFusion`) stays available as a Tier-0 entry point
+- ✅ Passive `Observer` hook (`ports::observer`) + `diff_fusion_observe::HttpObserver` companion crate — stream pipeline events from your own program into the playground for live visualization. See `examples/observe_demo.rs` and `playground/`.
 
 **What it's *not*:** a workflow engine, a real-time event bus, a generic
 ETL tool, or a CRDT. See `ROADMAP.md` for the out-of-scope list and why.
