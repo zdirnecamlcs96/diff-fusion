@@ -2,8 +2,8 @@
 //! [`Observer`] without running the merge / diff / push pipeline.
 //!
 //! The observer is purely a snapshot sink. The reconciliation pipeline is
-//! invoked separately — for example, the playground stores captures and
-//! lets the user click "Run Sync" to feed one into the demo pipeline.
+//! invoked separately — for example, a capture UI could store captures and
+//! let the user pick one to feed into the demo pipeline.
 
 use crate::domain::error::SyncError;
 use crate::ports::observer::{Capture, Observer, SideCapture};

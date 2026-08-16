@@ -104,7 +104,7 @@ Implementation plan for the phases below: [`docs/superpowers/plans/2026-07-23-p0
 
 ```
 ┌─ application layer (per host, never ported) ────────────────┐
-│  user's Node project · CLI · playground · future Go service │
+│  user's Node project · CLI · future Go service             │
 │  orchestrator loop · ancestor store · escalation · adapters │
 └──────────────────────────┬──────────────────────────────────┘
                            │ plain data (JSON)
@@ -119,8 +119,8 @@ Implementation plan for the phases below: [`docs/superpowers/plans/2026-07-23-p0
 ```
 
 **This (Rust) repo is the SSOT home**: spec, kernel, golden vector generator
-(`spec/vectors/`, `src/examples/gen_idempotency_vectors.rs` and friends), boundary
-JSON Schema (`spec/schema/`), and the playground all live here. The kernel
+(`spec/vectors/`, `src/examples/gen_idempotency_vectors.rs` and friends), and
+boundary JSON Schema (`spec/schema/`) all live here. The kernel
 is pure, synchronous, JSON-in/JSON-out — no I/O, no callbacks crossing the
 boundary — which keeps every delivery target's debugging story the same:
 replay the failing call's JSON arguments in a Rust test.
@@ -234,8 +234,6 @@ delivery only: `sdk/golang/kernel` wraps the four kernel functions, nothing else
 - **Observer/capture stream** (`src/crates/observe`, `src/src/ports/observer.rs`,
   `src/src/application/capture.rs`) — committed as-is; revisit after the P3
   Node integration proves the need.
-- **Svelte playground rewrite** (`src/playground/web`) — committed as-is;
-  remains a Rust-side dev/debug tool, not a delivery target.
 
 ### Durable persistence (unchanged driver: first real integration)
 

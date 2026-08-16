@@ -101,7 +101,7 @@ records — here, both `product_id` (`SF-001` vs `SH-001`) and `price`
 - Durable filesystem-backed ancestor store (`adapters::filesystem_ancestor`)
 - `SyncEngine` facade — one builder, no `Arc<dyn …>` ceremony; full layered module tree (`domain / application / ports / adapters / drivers`)
 - The detection-only facade (`DiffFusion`) stays available as a Tier-0 entry point
-- Passive `Observer` hook (`ports::observer`) for streaming pipeline events into a live playground
+- Passive `Observer` hook (`ports::observer`) for streaming pipeline events to any capture endpoint
 
 ## Three deliveries, one kernel
 

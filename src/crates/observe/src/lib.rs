@@ -1,8 +1,8 @@
 //! `diff_fusion_observe` — HTTP sink for `diff_fusion::ports::observer::Observer`.
 //!
 //! Wraps an [`Observer`] implementation around a non-blocking channel +
-//! background `tokio` task that POSTs each [`Capture`] as JSON to the
-//! playground's ingestion endpoint:
+//! background `tokio` task that POSTs each [`Capture`] as JSON to a
+//! capture/ingestion endpoint:
 //!
 //!   `POST {endpoint}/api/captures/{capture_id}`
 //!
@@ -27,7 +27,7 @@ use tokio::sync::mpsc;
 /// shipped one at a time; a small buffer is plenty.
 const DEFAULT_CAPACITY: usize = 4;
 
-/// Observer that ships captures to a playground over HTTP.
+/// Observer that ships captures to any HTTP endpoint.
 ///
 /// Cheap to clone via `Arc`. Send + Sync — wrap in `Arc<dyn Observer>`
 /// before passing to `capture()`.

@@ -494,7 +494,7 @@ without running diff/resolve/push. The orchestrator runs the pipeline
 when called explicitly and is no longer involved in observation.
 
 The `diff_fusion_observe` companion crate ships an `HttpObserver` that
-POSTs the capture to a playground:
+POSTs the capture to any HTTP endpoint:
 
 ```rust
 let observer: Arc<dyn Observer> = Arc::new(
@@ -503,13 +503,7 @@ let observer: Arc<dyn Observer> = Arc::new(
 diff_fusion::application::capture::capture(&side_a, &side_b, "po", "PO-1", &*observer).await?;
 ```
 
-The playground (`playground/`) saves captures at
-`POST /api/captures/:capture_id`, lists them at `GET /api/captures`, and
-serves a single capture at `GET /api/captures/:capture_id`. Saved
-captures appear in the UI's Captures panel; clicking one loads it into
-the demo form so the user can run the pipeline interactively. Captures
-are in-memory only and evict after an idle window. See
-`examples/observe_demo.rs` for a full end-to-end run.
+See `examples/observe_demo.rs` for a full end-to-end run.
 
 ---
 

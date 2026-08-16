@@ -1,18 +1,17 @@
 //! End-to-end smoke test for capture mode.
 //!
 //! Snapshots the canonical view of an entity from two `TestMemoryAdapter`
-//! sides and ships the resulting `Capture` to the playground over HTTP.
-//! The reconciliation pipeline is **not** run here — the playground stores
-//! the capture, and the user clicks a saved capture in the browser to
-//! load it into the demo form and run sync interactively.
+//! sides and ships the resulting `Capture` to a capture/ingestion endpoint
+//! over HTTP (`POST {endpoint}/api/captures/:capture_id`). The
+//! reconciliation pipeline is **not** run here — capture is decoupled from
+//! sync so a receiving service can store the capture and run it
+//! interactively later.
 //!
 //! Usage:
-//!   1. In one terminal:    cargo run -p playground
-//!   2. Open browser:       http://localhost:3000
-//!   3. In another terminal: cargo run --example observe_demo
-//!   4. Click the capture id that appears under "Captures".
+//!   1. Run a service that implements `POST /api/captures/:capture_id`.
+//!   2. In another terminal: cargo run --example observe_demo
 //!
-//! Override the playground endpoint with `PLAYGROUND_URL` and the capture
+//! Override the capture endpoint with `CAPTURE_URL` and the capture
 //! identifier with `OBSERVE_CAPTURE_ID`.
 
 use diff_fusion::adapters::test_memory::TestMemoryAdapter;
@@ -28,7 +27,7 @@ const ID: &str = "PO-42";
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let endpoint = std::env::var("PLAYGROUND_URL")
+    let endpoint = std::env::var("CAPTURE_URL")
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
     let capture_id = std::env::var("OBSERVE_CAPTURE_ID")
         .unwrap_or_else(|_| format!("demo-{}", now_ms()));

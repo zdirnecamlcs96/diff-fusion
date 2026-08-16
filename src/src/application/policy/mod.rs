@@ -33,7 +33,6 @@ pub mod invariants;
 pub mod owned_by;
 pub mod state_machine;
 pub mod structural;
-pub mod suggest;
 
 pub use additive::Additive;
 pub use append::Append;
@@ -43,7 +42,6 @@ pub use invariants::{Invariant, InvariantOutcome, InvariantSet};
 pub use owned_by::OwnedBy;
 pub use state_machine::{StateMachine, StateTransition};
 pub use structural::{OnAdded, OnBothChanged, OnRemoved, SetByKey};
-pub use suggest::suggest_policies;
 
 use crate::domain::diff::{Changelog, FieldChange};
 use serde_json::Value;

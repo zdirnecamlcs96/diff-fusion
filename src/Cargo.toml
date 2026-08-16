@@ -1,5 +1,5 @@
 [workspace]
-members = ["playground", "crates/observe"]
+members = ["crates/observe"]
 
 [package]
 edition = "2024"

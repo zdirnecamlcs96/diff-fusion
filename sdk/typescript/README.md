@@ -224,7 +224,6 @@ npx tsx examples/facadeUsage.ts   # Tier-0 DiffFusion walkthrough
 npx tsx examples/twoWaySync.ts    # Tier-1 SyncEngine end-to-end
 npx tsx examples/libraryUsage.ts  # Direct-library API: transform, compare, schema builders
 npx tsx examples/sourceOfTruth.ts # Owner-based conflict resolution
-npx tsx examples/observerHttp.ts  # POST a Capture to the playground (needs `cargo run -p playground` running)
 ```
 
 ## CLI

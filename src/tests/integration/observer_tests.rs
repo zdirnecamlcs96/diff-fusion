@@ -1,7 +1,7 @@
 //! Verifies the simplified observer contract: `capture()` snapshots both
 //! sides' canonical views and hands them to the observer once. The
 //! reconciliation pipeline is *not* run here — that's invoked separately
-//! (e.g. interactively in the playground).
+//! (e.g. interactively via a capture UI).
 
 use diff_fusion::adapters::test_memory::TestMemoryAdapter;
 use diff_fusion::application::capture::capture;

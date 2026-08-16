@@ -7,7 +7,7 @@
 //!
 //! Observers are passive: they don't run the merge / diff / push pipeline
 //! and don't decide what to do with the data. The reconciliation pipeline
-//! is invoked separately (interactively in the playground, or
+//! is invoked separately (interactively via a capture UI, or
 //! programmatically by `Orchestrator::run_cycle_at`).
 //!
 //! Observers MUST NOT block on I/O on the calling task; queue and return.

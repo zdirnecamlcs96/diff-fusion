@@ -49,7 +49,7 @@ System B ─▶ Canonical ─┘          │
 - ✅ Durable filesystem-backed ancestor store (`adapters::filesystem_ancestor`)
 - ✅ `SyncEngine` facade — one builder, no `Arc<dyn …>` ceremony; full layered module tree (`domain / application / ports / adapters / drivers`)
 - ✅ The detection-only facade (`DiffFusion`) stays available as a Tier-0 entry point
-- ✅ Passive `Observer` hook (`ports::observer`) + `diff_fusion_observe::HttpObserver` companion crate — stream pipeline events from your own program into the playground for live visualization. See `examples/observe_demo.rs` and `playground/`.
+- ✅ Passive `Observer` hook (`ports::observer`) + `diff_fusion_observe::HttpObserver` companion crate — stream pipeline events from your own program to any HTTP capture endpoint. See `examples/observe_demo.rs`.
 
 **What it's *not*:** a workflow engine, a real-time event bus, a generic
 ETL tool, or a CRDT. See `ROADMAP.md` for the out-of-scope list and why.
