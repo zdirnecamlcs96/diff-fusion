@@ -57,62 +57,8 @@ export function runContractSuite(
       expect(found!.externalId).toBe(inserted.externalId);
     });
 
-    it("replaying the same idempotency key is a noop", async () => {
-      const port = makeAdapter();
-      const payload = { contract_field: "idempotent" };
-      const k = idempotencyKey("contract_id_idem", "upsert", payload);
-      const r1 = await port.upsert(
-        "contract_entity",
-        "contract_id_idem",
-        payload,
-        undefined,
-        k,
-      );
-      const r2 = await port.upsert(
-        "contract_entity",
-        "contract_id_idem",
-        payload,
-        undefined,
-        k,
-      );
-      expect(r2.system).toBe(r1.system);
-      expect(r2.externalId).toBe(r1.externalId);
-      expect(r2.version).toBe(r1.version);
-    });
-
-    it("stale expectVersion is rejected and does not advance state", async () => {
-      const port = makeAdapter();
-      const payload1 = { n: 1 };
-      const k1 = idempotencyKey("contract_id_stale", "upsert", payload1);
-      const r1 = await port.upsert(
-        "contract_entity",
-        "contract_id_stale",
-        payload1,
-        undefined,
-        k1,
-      );
-
-      const payload2 = { n: 2 };
-      const k2 = idempotencyKey("contract_id_stale", "upsert", payload2);
-      await expect(
-        port.upsert(
-          "contract_entity",
-          "contract_id_stale",
-          payload2,
-          "version-that-will-never-match",
-          k2,
-        ),
-      ).rejects.toSatisfy(
-        (e) => e instanceof SyncError && e.kind === "StaleWrite",
-      );
-
-      const after = await port.findByCanonicalId(
-        "contract_entity",
-        "contract_id_stale",
-      );
-      expect(after).toBeDefined();
-      expect(after!.version).toBe(r1.version);
-    });
+    // C2 (stale expectVersion -> StaleWrite) and C3 (idempotency-key replay
+    // is a no-op) now live in ports/conformance.ts — see that module's harness.
 
     it("fetch round-trips the canonical payload", async () => {
       const port = makeAdapter();

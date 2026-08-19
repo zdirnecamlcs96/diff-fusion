@@ -18,8 +18,8 @@ use serde_json::json;
 pub async fn run_contract_suite<P: SystemPort>(port: &P) {
     find_returns_none_for_missing(port).await;
     upsert_then_find(port).await;
-    idempotent_repeat_is_noop(port).await;
-    stale_version_is_rejected(port).await;
+    // C2 (stale expect_version -> StaleWrite) and C3 (idempotency-key replay
+    // is a no-op) now live in ports::conformance — see that module's harness.
     fetch_roundtrips_canonical(port).await;
     expect_version_on_missing_record_is_stale(port).await;
 }
@@ -50,54 +50,6 @@ async fn upsert_then_find<P: SystemPort>(port: &P) {
         found.external_id, inserted.external_id,
         "find must return the ref created by upsert"
     );
-}
-
-async fn idempotent_repeat_is_noop<P: SystemPort>(port: &P) {
-    let payload = json!({"contract_field": "idempotent"});
-    let k = idempotency_key("contract_id_idem", "upsert", &payload);
-    let r1 = port
-        .upsert("contract_entity", "contract_id_idem", &payload, None, &k)
-        .await
-        .unwrap();
-    let r2 = port
-        .upsert("contract_entity", "contract_id_idem", &payload, None, &k)
-        .await
-        .unwrap();
-    assert_eq!(
-        r1, r2,
-        "replaying the same idempotency key must not create a second record or advance the version"
-    );
-}
-
-async fn stale_version_is_rejected<P: SystemPort>(port: &P) {
-    let payload = json!({"n": 1});
-    let k1 = idempotency_key("contract_id_stale", "upsert", &payload);
-    let r1 = port
-        .upsert("contract_entity", "contract_id_stale", &payload, None, &k1)
-        .await
-        .unwrap();
-    let k2 = idempotency_key("contract_id_stale", "upsert", &json!({"n": 2}));
-    let err = port
-        .upsert(
-            "contract_entity",
-            "contract_id_stale",
-            &json!({"n": 2}),
-            Some("version-that-will-never-match"),
-            &k2,
-        )
-        .await
-        .expect_err("upsert with wrong expect_version must fail");
-    assert!(
-        matches!(err, SyncError::StaleWrite { .. }),
-        "expected StaleWrite, got {err:?}"
-    );
-    // Ensure the adapter did not advance after the rejected write.
-    let after = port
-        .find_by_canonical_id("contract_entity", "contract_id_stale")
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(after.version, r1.version, "rejected write must not bump version");
 }
 
 async fn fetch_roundtrips_canonical<P: SystemPort>(port: &P) {
