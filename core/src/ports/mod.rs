@@ -5,6 +5,7 @@
 //! [`crate::adapters`].
 
 pub mod ancestor;
+pub mod conformance;
 pub mod escalation;
 pub mod observer;
 pub mod policy_store;

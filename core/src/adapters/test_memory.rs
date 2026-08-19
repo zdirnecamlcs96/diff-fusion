@@ -12,6 +12,10 @@
 //!   [`SyncError::StaleWrite`].
 //! - Idempotency keys are tracked per entity: a repeat upsert with the same
 //!   key is a no-op, returning the existing ref unchanged.
+//! - `upsert` shallow-merges the pushed CIF's top-level fields onto any
+//!   existing stored record — it never replaces the record wholesale, so
+//!   fields the CIF mapping doesn't carry (native-only state) survive a
+//!   push. See [`crate::ports::conformance`].
 //!
 //! The adapter is deliberately small — everything in this file is a
 //! reference, not a framework.
@@ -133,6 +137,7 @@ impl SystemPort for TestMemoryAdapter {
 
         let idx_key = (entity_type.to_string(), canonical_id.to_string());
         let existing_ext_id = inner.canonical_index.get(&idx_key).cloned();
+        let mut existing_canonical: Option<Value> = None;
 
         if let Some(ext_id) = existing_ext_id.clone() {
             let ent_key = (entity_type.to_string(), ext_id.clone());
@@ -159,6 +164,8 @@ impl SystemPort for TestMemoryAdapter {
                     ),
                 ));
             }
+
+            existing_canonical = Some(existing.canonical.clone());
         } else if expect_version.is_some() {
             // Caller expected an existing record but none exists.
             return Err(SyncError::stale(
@@ -182,9 +189,18 @@ impl SystemPort for TestMemoryAdapter {
             new_id
         };
 
+        // Read-modify-write: shallow-merge the pushed CIF onto whatever's
+        // already stored, so fields outside the CIF mapping (native-only
+        // local state) survive the push instead of being wiped by replace.
+        // ponytail: top-level shallow merge; deep path-merge if nested local fields ever needed
+        let merged_canonical = match &existing_canonical {
+            Some(base) => shallow_merge(base, canonical),
+            None => canonical.clone(),
+        };
+
         let stored = StoredEntity {
             external_id: external_id.clone(),
-            canonical: canonical.clone(),
+            canonical: merged_canonical,
             version,
             last_idempotency_key: Some(*idempotency_key),
         };
@@ -194,6 +210,19 @@ impl SystemPort for TestMemoryAdapter {
 
         Ok(self.make_ref(&external_id, version))
     }
+}
+
+/// Shallow-merge `patch`'s top-level keys onto `base`. Non-object values
+/// fall back to a straight replace (there's no sensible field to merge).
+fn shallow_merge(base: &Value, patch: &Value) -> Value {
+    let (Some(base_obj), Some(patch_obj)) = (base.as_object(), patch.as_object()) else {
+        return patch.clone();
+    };
+    let mut out = base_obj.clone();
+    for (k, v) in patch_obj {
+        out.insert(k.clone(), v.clone());
+    }
+    Value::Object(out)
 }
 
 #[cfg(test)]
@@ -319,5 +348,39 @@ mod tests {
         let r = a.seed("purchase_order", "PO-7", json!({"total": 77}));
         let found = a.find_by_canonical_id("purchase_order", "PO-7").await.unwrap();
         assert_eq!(found, Some(r));
+    }
+
+    // -- SystemPort conformance harness ---------------------------------
+    // `seed()` already bypasses upsert; `fetch()` + `find_by_canonical_id()`
+    // already return the raw stored value verbatim (this adapter doesn't
+    // do CIF↔native translation), so both sides of `RawAccess` fall
+    // straight through to existing SystemPort methods.
+
+    use crate::ports::conformance::{RawAccess, assert_system_port_contract};
+
+    struct RawView<'a>(&'a TestMemoryAdapter);
+
+    #[async_trait::async_trait]
+    impl<'a> RawAccess for RawView<'a> {
+        async fn seed_raw(&self, entity_type: &str, canonical_id: &str, native: Value) -> ExternalRef {
+            self.0.seed(entity_type, canonical_id, native)
+        }
+
+        async fn read_raw(&self, entity_type: &str, canonical_id: &str) -> Value {
+            let r = self
+                .0
+                .find_by_canonical_id(entity_type, canonical_id)
+                .await
+                .unwrap()
+                .expect("seed_raw must have created a findable record");
+            let (val, _) = self.0.fetch(entity_type, &r).await.unwrap();
+            val
+        }
+    }
+
+    #[tokio::test]
+    async fn passes_the_system_port_conformance_harness() {
+        let a = TestMemoryAdapter::new("sys_a");
+        assert_system_port_contract(&a, &RawView(&a)).await;
     }
 }

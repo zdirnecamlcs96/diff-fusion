@@ -13,6 +13,10 @@
  *   {@link SyncError} with `kind: "StaleWrite"`.
  * - Idempotency keys are tracked per entity: a repeat upsert with the same
  *   key is a no-op, returning the existing ref unchanged.
+ * - `upsert` shallow-merges the pushed CIF's top-level fields onto any
+ *   existing stored record — it never replaces the record wholesale, so
+ *   fields the CIF mapping doesn't carry (native-only state) survive a
+ *   push. See `ports/conformance.ts`.
  */
 
 import { SyncError } from "../domain/error.js";
@@ -45,6 +49,19 @@ function setNested<V>(m: Map<string, Map<string, V>>, a: string, b: string, v: V
     m.set(a, inner);
   }
   inner.set(b, v);
+}
+
+function isJsonObject(v: JsonValue): v is { [k: string]: JsonValue } {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Shallow-merge `patch`'s top-level keys onto `base`. Non-object values
+ * fall back to a straight replace (there's no sensible field to merge).
+ */
+function shallowMerge(base: JsonValue, patch: JsonValue): JsonValue {
+  if (!isJsonObject(base) || !isJsonObject(patch)) return patch;
+  return { ...base, ...patch };
 }
 
 export class TestMemoryAdapter implements SystemPort {
@@ -116,6 +133,7 @@ export class TestMemoryAdapter implements SystemPort {
     idempotencyKey: Uint8Array,
   ): Promise<ExternalRef> {
     const existingExtId = getNested(this.canonicalIndex, entityType, canonicalId);
+    let existingCanonical: JsonValue | undefined;
 
     if (existingExtId !== undefined) {
       const existing = getNested(this.entities, entityType, existingExtId);
@@ -137,6 +155,8 @@ export class TestMemoryAdapter implements SystemPort {
           message: `version mismatch: caller expected ${expectVersion}, current ${existing.version}`,
         });
       }
+
+      existingCanonical = existing.canonical;
     } else if (expectVersion !== undefined) {
       throw SyncError.staleWrite({
         system: this._systemType,
@@ -156,9 +176,16 @@ export class TestMemoryAdapter implements SystemPort {
       setNested(this.canonicalIndex, entityType, canonicalId, externalId);
     }
 
+    // Read-modify-write: shallow-merge the pushed CIF onto whatever's
+    // already stored, so fields outside the CIF mapping (native-only local
+    // state) survive the push instead of being wiped by replace.
+    // ponytail: top-level shallow merge; deep path-merge if nested local fields ever needed
+    const mergedCanonical =
+      existingCanonical !== undefined ? shallowMerge(existingCanonical, canonical) : canonical;
+
     const stored: StoredEntity = {
       externalId,
-      canonical,
+      canonical: mergedCanonical,
       version,
       lastIdempotencyKey: idempotencyKey,
     };
