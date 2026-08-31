@@ -35,20 +35,59 @@ delivery only.
 expects from a tagged Go struct, instead of hand-writing schema.json:
 
     type Item struct {
-        SKU string  `cif:"sku,required" hubspot:"properties.sku"`
-        Qty float64 `cif:"qty" hubspot:"properties.quantity"`
+        SKU string  `cif:"sku,required" hubspot:"properties.sku" salesforce:"StockKeepingUnit"`
+        Qty float64 `cif:"qty" hubspot:"properties.quantity"`   // no salesforce tag: local-only there
     }
     type Doc struct {
-        Items []Item `cif:"items" hubspot:"lineItems"`
+        Items []Item `cif:"items" hubspot:"lineItems" salesforce:"."`
     }
 
-    schema, err := kernel.SchemaFromStruct(Doc{}, "hubspot")
+    schema, err := kernel.SchemaFromStruct(Doc{}, "hubspot", "salesforce")
     out, err := k.TransformToCIF(ctx, source, schema, "hubspot")
 
 `cif:"<field>[,required]"` names the CIF field (`cif:"-"` or no tag skips
 it); each format passed to `SchemaFromStruct` reads its source path from the
 struct tag of that same name, so a field can be mapped in one format and
 omitted (local-only) in another.
+
+What it emits (pretty-printed here for readability; the real call produces
+compact JSON) for the struct above:
+
+    {
+      "cif_schema": {
+        "items": {
+          "type": "array",
+          "element": {
+            "qty": { "type": "number" },
+            "sku": { "type": "string", "required": true }
+          }
+        }
+      },
+      "transformations": {
+        "hubspot": {
+          "items": {
+            "source_path": "lineItems",
+            "type": "array",
+            "element": {
+              "qty": { "source_path": "properties.quantity", "type": "number" },
+              "sku": { "source_path": "properties.sku", "type": "string" }
+            }
+          }
+        },
+        "salesforce": {
+          "items": {
+            "source_path": ".",
+            "type": "array",
+            "element": {
+              "sku": { "source_path": "StockKeepingUnit", "type": "string" }
+            }
+          }
+        }
+      }
+    }
+
+A source path of `"."` means "the current scope" — the kernel convention
+used when a format's substructure already matches the enclosing element.
 
 - Nested objects must be a struct with cif-tagged fields — map fields are
   rejected, and a struct with zero cif-tagged fields is rejected (an opaque
