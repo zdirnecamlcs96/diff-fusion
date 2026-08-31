@@ -247,6 +247,7 @@ mod tests {
         let report = diff_fusion.compare(&old, &new);
         assert!(report.has_conflicts);
         assert_eq!(report.total_conflicts, 1);
+        assert_eq!(report.conflicts[0].path, "price");
     }
 
     #[test]

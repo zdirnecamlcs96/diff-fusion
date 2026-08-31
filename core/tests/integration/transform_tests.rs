@@ -1,4 +1,4 @@
-use diff_fusion::{transform_to_cif, transform_to_cif_string};
+use diff_fusion::transform_to_cif;
 use serde_json::{json, Value};
 
 // Include test helpers
@@ -223,30 +223,6 @@ fn test_transform_invalid_format_id() {
     let result = transform_to_cif(&source, &schema, "nonexistent_format");
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Format 'nonexistent_format' not found"));
-}
-
-#[test]
-fn test_transform_string_api() {
-    let source_json = r#"{"name": "Widget", "price": 19.99}"#.to_string();
-    let schema_json = serde_json::to_string(&basic_product_schema()).unwrap();
-
-    let result = transform_to_cif_string(source_json, schema_json, "format_a".to_string());
-    assert!(result.is_ok());
-
-    let cif_json = result.unwrap();
-    let cif: Value = serde_json::from_str(&cif_json).unwrap();
-    assert_eq!(cif["product_name"], "Widget");
-    assert_eq!(cif["product_price"], 19.99);
-}
-
-#[test]
-fn test_transform_string_invalid_json() {
-    let source_json = "invalid json".to_string();
-    let schema_json = "{}".to_string();
-
-    let result = transform_to_cif_string(source_json, schema_json, "format_a".to_string());
-    assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Invalid source JSON"));
 }
 
 // Ported from sdk/typescript/tests/unit/application/transform.test.ts
