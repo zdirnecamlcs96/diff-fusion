@@ -28,3 +28,35 @@ From the repo root (rustup-managed cargo, `wasm32-wasip1` target installed):
 The orchestrator/adapter layers are deliberately not here — app-layer code
 is native per host (see ROADMAP "Architecture"). This package is kernel
 delivery only.
+
+## SchemaFromStruct
+
+`kernel.SchemaFromStruct` derives the CIF schema JSON that `TransformToCIF`
+expects from a tagged Go struct, instead of hand-writing schema.json:
+
+    type Item struct {
+        SKU string  `cif:"sku,required" hubspot:"properties.sku"`
+        Qty float64 `cif:"qty" hubspot:"properties.quantity"`
+    }
+    type Doc struct {
+        Items []Item `cif:"items" hubspot:"lineItems"`
+    }
+
+    schema, err := kernel.SchemaFromStruct(Doc{}, "hubspot")
+    out, err := k.TransformToCIF(ctx, source, schema, "hubspot")
+
+`cif:"<field>[,required]"` names the CIF field (`cif:"-"` or no tag skips
+it); each format passed to `SchemaFromStruct` reads its source path from the
+struct tag of that same name, so a field can be mapped in one format and
+omitted (local-only) in another.
+
+- Nested objects must be a struct with cif-tagged fields — map fields are
+  rejected, and a struct with zero cif-tagged fields is rejected (an opaque
+  `{"type":"object"}` with no declared schema isn't allowed).
+- Time fields must be declared as `string` holding a UTC RFC 3339 timestamp;
+  `time.Time` fields are rejected.
+- `any`/interface fields are rejected — declare a concrete schema type.
+- Types implementing `json.Marshaler` are rejected — reflection can't see
+  their custom JSON shape; declare the field with the marshaled type instead
+  (e.g. `string`).
+- Duplicate `cif` field names within the same struct are rejected.
