@@ -149,6 +149,15 @@ can write `diff_fusion::SyncEngine` instead of
 remain the authoritative source of truth — the re-exports are
 ergonomics, not canonical API.
 
+`ports/policy_store.rs` and `application/policy/declaration.rs`
+together own the policy-config format and its storage contract.
+Extraction candidate: if a first real database adapter for
+`PolicyStore` lands, or a second consumer needs the declaration
+format, split this pair into its own workspace crate — same pattern
+as `crates/observe` (one-way dependency, pulled back into `core` only
+as a dev-dependency). Until that trigger, it stays in `core`; traits
+cost nothing to keep close.
+
 ### Tests
 
 ```
@@ -430,6 +439,14 @@ than 5% of fields, stop and ask whether a new Tier 1 strategy should be
 promoted. If a policy needs conditional logic, ask whether the canonical
 model should be restructured so the rule becomes trivial
 (see App.md § 04 — "the deeper rule").
+
+**Growth guardrail** — `application/policy/` is already about a third
+of the kernel by line count. A new merge-policy tier means: a new file
+under `application/policy/`, golden vectors in `spec/vectors/`, and a
+conformance vector-count bump in all three runtimes (Rust, TS, Go). If
+any single policy file grows past ~700 lines (the current ceiling,
+held by `structural.rs`), split it into a submodule directory instead
+of letting it keep growing.
 
 ---
 
