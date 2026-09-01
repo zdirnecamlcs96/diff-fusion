@@ -1,10 +1,17 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { mergePolicyRefSchema } from "../../src/application/policy/declaration.js";
+import {
+  mergePolicyRefSchema,
+  policyDocumentSchema,
+} from "../../src/application/policy/declaration.js";
 import { mergeOutcomeSchema } from "../../src/application/policy/index.js";
 import {
+  batchResolutionSchema,
+  fuseResultSchema,
   kernelCompareJsonRaw,
+  kernelFuseRaw,
+  kernelMergeBatchRaw,
   kernelMergeFieldRaw,
   kernelThreeWayDiffRaw,
   kernelTransformToCifRaw,
@@ -33,6 +40,26 @@ type MergeFieldVector = {
   isErr: boolean;
 };
 
+type MergeBatchVector = {
+  name: string;
+  changelog: string;
+  policyDoc: string;
+  ctx: string;
+  expected: string;
+  isErr: boolean;
+};
+
+type FuseVector = {
+  name: string;
+  ancestor: string;
+  a: string;
+  b: string;
+  policyDoc: string;
+  ctx: string;
+  expected: string;
+  isErr: boolean;
+};
+
 type CompareJsonVector = {
   name: string;
   a: string;
@@ -53,6 +80,8 @@ type TransformToCifVector = {
 type KernelVectors = {
   threeWayDiff: ThreeWayDiffVector[];
   mergeField: MergeFieldVector[];
+  mergeBatch: MergeBatchVector[];
+  fuse: FuseVector[];
   compareJson: CompareJsonVector[];
   transformToCif: TransformToCifVector[];
 };
@@ -65,18 +94,22 @@ const vectors = JSON.parse(
   readFileSync(fileURLToPath(fixtureUrl), "utf8"),
 ) as KernelVectors;
 
-const EXPECTED_THREE_WAY_DIFF = 16;
+const EXPECTED_THREE_WAY_DIFF = 17;
 const EXPECTED_MERGE_FIELD = 29;
+const EXPECTED_MERGE_BATCH = 5;
+const EXPECTED_FUSE = 7;
 const EXPECTED_COMPARE_JSON = 8;
 const EXPECTED_TRANSFORM_TO_CIF = 13;
 if (
   vectors.threeWayDiff.length !== EXPECTED_THREE_WAY_DIFF ||
   vectors.mergeField.length !== EXPECTED_MERGE_FIELD ||
+  vectors.mergeBatch.length !== EXPECTED_MERGE_BATCH ||
+  vectors.fuse.length !== EXPECTED_FUSE ||
   vectors.compareJson.length !== EXPECTED_COMPARE_JSON ||
   vectors.transformToCif.length !== EXPECTED_TRANSFORM_TO_CIF
 ) {
   throw new Error(
-    `expected ${EXPECTED_THREE_WAY_DIFF} threeWayDiff + ${EXPECTED_MERGE_FIELD} mergeField + ${EXPECTED_COMPARE_JSON} compareJson + ${EXPECTED_TRANSFORM_TO_CIF} transformToCif vectors, got ${vectors.threeWayDiff.length} + ${vectors.mergeField.length} + ${vectors.compareJson.length} + ${vectors.transformToCif.length}`,
+    `expected ${EXPECTED_THREE_WAY_DIFF} threeWayDiff + ${EXPECTED_MERGE_FIELD} mergeField + ${EXPECTED_MERGE_BATCH} mergeBatch + ${EXPECTED_FUSE} fuse + ${EXPECTED_COMPARE_JSON} compareJson + ${EXPECTED_TRANSFORM_TO_CIF} transformToCif vectors, got ${vectors.threeWayDiff.length} + ${vectors.mergeField.length} + ${vectors.mergeBatch.length} + ${vectors.fuse.length} + ${vectors.compareJson.length} + ${vectors.transformToCif.length}`,
   );
 }
 
@@ -115,6 +148,38 @@ describe("kernel vector conformance", () => {
           ).toBe(v.expected);
         } else {
           expect(kernelMergeFieldRaw(v.change, v.policyRef, v.ctx)).toBe(
+            v.expected,
+          );
+        }
+      });
+    }
+  });
+
+  describe("merge_batch", () => {
+    for (const v of vectors.mergeBatch) {
+      it(v.name, () => {
+        if (v.isErr) {
+          expect(
+            messageOf(() => kernelMergeBatchRaw(v.changelog, v.policyDoc, v.ctx)),
+          ).toBe(v.expected);
+        } else {
+          expect(kernelMergeBatchRaw(v.changelog, v.policyDoc, v.ctx)).toBe(
+            v.expected,
+          );
+        }
+      });
+    }
+  });
+
+  describe("fuse", () => {
+    for (const v of vectors.fuse) {
+      it(v.name, () => {
+        if (v.isErr) {
+          expect(
+            messageOf(() => kernelFuseRaw(v.ancestor, v.a, v.b, v.policyDoc, v.ctx)),
+          ).toBe(v.expected);
+        } else {
+          expect(kernelFuseRaw(v.ancestor, v.a, v.b, v.policyDoc, v.ctx)).toBe(
             v.expected,
           );
         }
@@ -162,6 +227,19 @@ describe("zod schema drift guard", () => {
       expect(() => wireFieldChangeSchema.parse(JSON.parse(v.change))).not.toThrow();
       expect(() => mergePolicyRefSchema.parse(JSON.parse(v.policyRef))).not.toThrow();
       expect(() => mergeOutcomeSchema.parse(JSON.parse(v.expected))).not.toThrow();
+    });
+  }
+  for (const v of vectors.mergeBatch.filter((v) => !v.isErr)) {
+    it(`${v.name}: schemas accept vector payloads`, () => {
+      expect(() => wireChangelogSchema.parse(JSON.parse(v.changelog))).not.toThrow();
+      expect(() => policyDocumentSchema.parse(JSON.parse(v.policyDoc))).not.toThrow();
+      expect(() => batchResolutionSchema.parse(JSON.parse(v.expected))).not.toThrow();
+    });
+  }
+  for (const v of vectors.fuse.filter((v) => !v.isErr)) {
+    it(`${v.name}: schemas accept vector payloads`, () => {
+      expect(() => policyDocumentSchema.parse(JSON.parse(v.policyDoc))).not.toThrow();
+      expect(() => fuseResultSchema.parse(JSON.parse(v.expected))).not.toThrow();
     });
   }
 });

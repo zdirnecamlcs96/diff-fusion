@@ -19,7 +19,9 @@ const wasm = require("../../wasm/diff_fusion.js");
 const EXPECTED_WASM_EXPORTS = [
   "canonical_json",
   "compare_json",
+  "fuse",
   "idempotency_key_hex",
+  "merge_batch",
   "merge_field",
   "three_way_diff",
   "transform_to_cif",
@@ -43,7 +45,9 @@ describe("kernel wasm export parity", () => {
     const wrapperFor: Record<(typeof EXPECTED_WASM_EXPORTS)[number], unknown> = {
       canonical_json: kernel.kernelCanonicalJson,
       compare_json: kernel.kernelCompareJson,
+      fuse: kernel.kernelFuse,
       idempotency_key_hex: kernel.kernelIdempotencyKeyHex,
+      merge_batch: kernel.kernelMergeBatch,
       merge_field: kernel.kernelMergeField,
       three_way_diff: kernel.kernelThreeWayDiff,
       transform_to_cif: kernel.kernelTransformToCif,

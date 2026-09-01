@@ -1,3 +1,4 @@
+use crate::domain::json_path::split_path;
 use serde_json::Value;
 use std::error::Error;
 
@@ -248,9 +249,9 @@ impl Transformer {
     /// (e.g. `items.0.name`); non-numeric segments index objects.
     fn extract_value_by_path<'a>(json: &'a Value, path: &str) -> Option<&'a Value> {
         let mut current = json;
-        for part in path.split('.') {
+        for part in split_path(path) {
             current = match current {
-                Value::Object(map) => map.get(part)?,
+                Value::Object(map) => map.get(&part)?,
                 Value::Array(arr) => arr.get(part.parse::<usize>().ok()?)?,
                 _ => return None,
             };

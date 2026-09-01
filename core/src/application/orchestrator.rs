@@ -378,7 +378,7 @@ struct PreparedCycle {
 /// policies. Paths are dotted object keys (matching the three-way diff's
 /// output). Intermediate objects are created when missing so resolutions
 /// onto previously-unset nested fields work.
-fn apply_resolution(base: &Value, resolution: &Resolution) -> Value {
+pub(crate) fn apply_resolution(base: &Value, resolution: &Resolution) -> Value {
     let mut out = base.clone();
     for (path, value) in &resolution.resolved {
         crate::domain::json_path::set_at_path(&mut out, path, value.clone());

@@ -28,7 +28,8 @@
 // runtime's own serializer.
 
 use diff_fusion::drivers::wire::{
-    compare_json_impl, merge_field_impl, three_way_diff_impl, transform_to_cif_impl,
+    compare_json_impl, fuse_impl, merge_batch_impl, merge_field_impl, three_way_diff_impl,
+    transform_to_cif_impl,
 };
 use serde_json::{json, Value};
 
@@ -85,6 +86,46 @@ fn merge_field_entry(name: &str, change: &str, policy_ref: &str, ctx: &str) -> V
         "name": name,
         "change": change,
         "policyRef": policy_ref,
+        "ctx": ctx,
+        "expected": expected,
+        "isErr": is_err,
+    })
+}
+
+fn merge_batch_entry(name: &str, changelog: &str, policy_doc: &str, ctx: &str) -> Value {
+    let (expected, is_err) = match merge_batch_impl(changelog, policy_doc, ctx) {
+        Ok(s) => (s, false),
+        Err(e) => (e, true),
+    };
+    json!({
+        "name": name,
+        "changelog": changelog,
+        "policyDoc": policy_doc,
+        "ctx": ctx,
+        "expected": expected,
+        "isErr": is_err,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fuse_entry(
+    name: &str,
+    ancestor: &str,
+    a: &str,
+    b: &str,
+    policy_doc: &str,
+    ctx: &str,
+) -> Value {
+    let (expected, is_err) = match fuse_impl(ancestor, a, b, policy_doc, ctx) {
+        Ok(s) => (s, false),
+        Err(e) => (e, true),
+    };
+    json!({
+        "name": name,
+        "ancestor": ancestor,
+        "a": a,
+        "b": b,
+        "policyDoc": policy_doc,
         "ctx": ctx,
         "expected": expected,
         "isErr": is_err,
@@ -177,6 +218,18 @@ fn main() {
             r#"{"a":1,"b":2,"c":3}"#,
             r#"{"a":10,"b":2,"c":3}"#,
             r#"{"a":1,"b":20,"c":3}"#,
+        ),
+
+        // ─── Dotted object keys ────────────────────────────────────────────
+        // A JSON key containing a literal '.' (e.g. a timestamp-derived
+        // SKU) must come back with that dot escaped ('\.') in the path, so
+        // the wire consumer's set_at_path doesn't split it into a phantom
+        // nested branch.
+        three_way_entry(
+            "dotted-object-key-path-is-escaped",
+            r#"{"items":{"key_2025-01-01T00:00:00.000Z_demo":{"name":"old"}}}"#,
+            r#"{"items":{"key_2025-01-01T00:00:00.000Z_demo":{"name":"new"}}}"#,
+            r#"{"items":{"key_2025-01-01T00:00:00.000Z_demo":{"name":"old"}}}"#,
         ),
 
         // ─── Errors ────────────────────────────────────────────────────────
@@ -521,11 +574,124 @@ fn main() {
         ),
     ];
 
+    let merge_batch = vec![
+        // ─── All resolved ──────────────────────────────────────────────────
+        merge_batch_entry(
+            "all-resolved",
+            r#"{"changes":[{"path":"price","old_value":10,"new_from_a":15,"source":"a"},{"path":"qty","old_value":5,"new_from_a":6,"new_from_b":7,"source":"both"}]}"#,
+            r#"{"fields":{"price":{"kind":"owned_by","system":"netsuite"},"qty":{"kind":"additive"}}}"#,
+            r#"{"system_a":"netsuite","system_b":"shopify"}"#,
+        ),
+        // ─── Mixed resolved + policy conflict ─────────────────────────────
+        merge_batch_entry(
+            "mixed-resolved-and-policy-conflict",
+            r#"{"changes":[{"path":"price","old_value":10,"new_from_a":15,"source":"a"},{"path":"status","old_value":"closed","new_from_a":"draft","source":"a"}]}"#,
+            r#"{"fields":{"price":{"kind":"owned_by","system":"netsuite"},"status":{"kind":"state_machine","transitions":[{"from":"draft","to":"open"}]}}}"#,
+            r#"{"system_a":"netsuite","system_b":"shopify"}"#,
+        ),
+        // ─── No-policy conflict — path missing from `fields`, no `default` ──
+        merge_batch_entry(
+            "no-policy-conflict",
+            r#"{"changes":[{"path":"mystery","old_value":1,"new_from_a":2,"source":"a"}]}"#,
+            r#"{"fields":{}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+        // ─── Absent-vs-null echo — no policy declared, so the conflict change
+        // must round-trip the wire's absent/present-null distinction exactly.
+        merge_batch_entry(
+            "absent-vs-null-echoed-in-conflict",
+            r#"{"changes":[{"path":"status","old_value":"draft","new_from_a":null,"source":"a"}]}"#,
+            r#"{"fields":{}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+        // ─── Error — inconsistent change, index named in the message ────────
+        merge_batch_entry(
+            "error-inconsistent-change-names-index",
+            r#"{"changes":[{"path":"price","old_value":10,"new_from_a":15,"source":"a"},{"path":"status","old_value":"draft","new_from_b":"open","source":"a"}]}"#,
+            r#"{"fields":{"price":{"kind":"owned_by","system":"netsuite"}}}"#,
+            r#"{"system_a":"netsuite","system_b":"shopify"}"#,
+        ),
+    ];
+
+    let fuse = vec![
+        // ─── All resolved, nested dotted path ─────────────────────────────
+        fuse_entry(
+            "all-resolved-nested-dotted-path",
+            r#"{"pricing":{"amount":10,"currency":"usd"}}"#,
+            r#"{"pricing":{"amount":12,"currency":"usd"}}"#,
+            r#"{"pricing":{"amount":10,"currency":"usd"}}"#,
+            r#"{"fields":{"pricing.amount":{"kind":"owned_by","system":"x"}}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+        // ─── Mixed resolved + no-policy conflict ──────────────────────────
+        fuse_entry(
+            "mixed-resolved-and-conflict",
+            r#"{"price":10,"mystery":1}"#,
+            r#"{"price":15,"mystery":2}"#,
+            r#"{"price":10,"mystery":1}"#,
+            r#"{"fields":{"price":{"kind":"owned_by","system":"x"}}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+        // ─── No-policy conflict — value stays at the ancestor's value ─────
+        fuse_entry(
+            "no-policy-conflict",
+            r#"{"mystery":1}"#,
+            r#"{"mystery":2}"#,
+            r#"{"mystery":1}"#,
+            r#"{"fields":{}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+        // ─── SetByKey keyed-array merge lands the full merged array ───────
+        fuse_entry(
+            "set-by-key-merged-array-in-value",
+            r#"{"items":[{"sku":"x","q":1}]}"#,
+            r#"{"items":[{"sku":"x","q":1},{"sku":"y","q":2}]}"#,
+            r#"{"items":[{"sku":"x","q":1},{"sku":"z","q":3}]}"#,
+            r#"{"fields":{"items":{"kind":"set_by_key","identity":["sku"],"a_anchor":"sku","b_anchor":"sku"}}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+        // ─── Cleared field lands as a literal null in value ───────────────
+        fuse_entry(
+            "cleared-field-is-literal-null",
+            r#"{"status":"draft"}"#,
+            r#"{"status":null}"#,
+            r#"{"status":"draft"}"#,
+            r#"{"fields":{"status":{"kind":"owned_by","system":"x"}}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+        // ─── Dotted object key merges cleanly into the real key ───────────
+        // Conflict-free two-field merge (name via A, q via B) under a key
+        // containing a literal '.'. Exercises the fuse_impl → diff3 →
+        // resolve → apply_resolution's set_at_path round trip end to end:
+        // the merged value must land inside the ORIGINAL dotted key, not a
+        // phantom nested branch.
+        fuse_entry(
+            "dotted-key-conflict-free-merge-lands-in-real-key",
+            r#"{"items":{"key_2025-01-01T00:00:00.000Z_demo":{"name":"old","q":1}}}"#,
+            r#"{"items":{"key_2025-01-01T00:00:00.000Z_demo":{"name":"new","q":1}}}"#,
+            r#"{"items":{"key_2025-01-01T00:00:00.000Z_demo":{"name":"old","q":2}}}"#,
+            r#"{"fields":{"items.key_2025-01-01T00:00:00\\.000Z_demo.name":{"kind":"owned_by","system":"x"},"items.key_2025-01-01T00:00:00\\.000Z_demo.q":{"kind":"owned_by","system":"y"}}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+
+        // ─── Errors ────────────────────────────────────────────────────────
+        fuse_entry(
+            "malformed-ancestor-json",
+            "{bad",
+            r#"{}"#,
+            r#"{}"#,
+            r#"{"fields":{}}"#,
+            r#"{"system_a":"x","system_b":"y"}"#,
+        ),
+    ];
+
     let out = json!({
         "threeWayDiff": Value::Array(three_way_diff),
         "mergeField": Value::Array(merge_field),
+        "mergeBatch": Value::Array(merge_batch),
         "compareJson": Value::Array(compare_json),
         "transformToCif": Value::Array(transform_to_cif),
+        "fuse": Value::Array(fuse),
     });
     println!("{}", serde_json::to_string_pretty(&out).unwrap());
 }

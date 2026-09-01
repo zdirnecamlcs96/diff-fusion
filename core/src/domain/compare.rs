@@ -1,3 +1,4 @@
+use crate::domain::json_path::escape_segment;
 use serde_json::Value;
 use std::collections::BTreeSet;
 
@@ -25,10 +26,11 @@ fn recurse_compare(path: &str, a: &Value, b: &Value, diffs: &mut Vec<(String, (V
         (Value::Object(map_a), Value::Object(map_b)) => {
             let keys: BTreeSet<_> = map_a.keys().chain(map_b.keys()).collect();
             for key in keys {
+                let escaped_key = escape_segment(key);
                 let new_path = if path.is_empty() {
-                    key.to_string()
+                    escaped_key
                 } else {
-                    format!("{path}.{key}")
+                    format!("{path}.{escaped_key}")
                 };
                 recurse_compare(
                     &new_path,

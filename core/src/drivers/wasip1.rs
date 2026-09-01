@@ -12,8 +12,8 @@
 //! `df_dealloc(ptr, 0)` on it is a no-op).
 
 use super::wire::{
-    canonical_json_impl, compare_json_impl, idempotency_key_hex_impl, merge_field_impl,
-    three_way_diff_impl, transform_to_cif_impl,
+    canonical_json_impl, compare_json_impl, fuse_impl, idempotency_key_hex_impl, merge_batch_impl,
+    merge_field_impl, three_way_diff_impl, transform_to_cif_impl,
 };
 
 #[unsafe(no_mangle)]
@@ -79,6 +79,48 @@ pub extern "C" fn df_merge_field(
         merge_field_impl(
             arg(change_ptr, change_len)?,
             arg(policy_ptr, policy_len)?,
+            arg(ctx_ptr, ctx_len)?,
+        )
+    })())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn df_merge_batch(
+    changelog_ptr: u32,
+    changelog_len: u32,
+    policy_doc_ptr: u32,
+    policy_doc_len: u32,
+    ctx_ptr: u32,
+    ctx_len: u32,
+) -> u64 {
+    envelope((|| {
+        merge_batch_impl(
+            arg(changelog_ptr, changelog_len)?,
+            arg(policy_doc_ptr, policy_doc_len)?,
+            arg(ctx_ptr, ctx_len)?,
+        )
+    })())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn df_fuse(
+    ancestor_ptr: u32,
+    ancestor_len: u32,
+    a_ptr: u32,
+    a_len: u32,
+    b_ptr: u32,
+    b_len: u32,
+    policy_doc_ptr: u32,
+    policy_doc_len: u32,
+    ctx_ptr: u32,
+    ctx_len: u32,
+) -> u64 {
+    envelope((|| {
+        fuse_impl(
+            arg(ancestor_ptr, ancestor_len)?,
+            arg(a_ptr, a_len)?,
+            arg(b_ptr, b_len)?,
+            arg(policy_doc_ptr, policy_doc_len)?,
             arg(ctx_ptr, ctx_len)?,
         )
     })())

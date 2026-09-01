@@ -41,11 +41,33 @@ type transformToCifVector struct {
 	IsErr    bool   `json:"isErr"`
 }
 
+type mergeBatchVector struct {
+	Name      string `json:"name"`
+	Changelog string `json:"changelog"`
+	PolicyDoc string `json:"policyDoc"`
+	Ctx       string `json:"ctx"`
+	Expected  string `json:"expected"`
+	IsErr     bool   `json:"isErr"`
+}
+
+type fuseVector struct {
+	Name      string `json:"name"`
+	Ancestor  string `json:"ancestor"`
+	A         string `json:"a"`
+	B         string `json:"b"`
+	PolicyDoc string `json:"policyDoc"`
+	Ctx       string `json:"ctx"`
+	Expected  string `json:"expected"`
+	IsErr     bool   `json:"isErr"`
+}
+
 type kernelVectors struct {
 	ThreeWayDiff   []threeWayVector       `json:"threeWayDiff"`
 	MergeField     []mergeFieldVector     `json:"mergeField"`
 	CompareJSON    []compareJSONVector    `json:"compareJson"`
 	TransformToCif []transformToCifVector `json:"transformToCif"`
+	MergeBatch     []mergeBatchVector     `json:"mergeBatch"`
+	Fuse           []fuseVector           `json:"fuse"`
 }
 
 // The P4 gate for three_way_diff/merge_field: all vectors, read straight
@@ -63,16 +85,16 @@ func TestKernelVectors(t *testing.T) {
 	if err := json.Unmarshal(raw, &vs); err != nil {
 		t.Fatalf("parse vectors: %v", err)
 	}
-	if len(vs.ThreeWayDiff) != 16 || len(vs.MergeField) != 29 || len(vs.CompareJSON) != 8 || len(vs.TransformToCif) != 13 {
-		t.Fatalf("expected 16 threeWayDiff + 29 mergeField + 8 compareJson + 13 transformToCif vectors, got %d + %d + %d + %d",
-			len(vs.ThreeWayDiff), len(vs.MergeField), len(vs.CompareJSON), len(vs.TransformToCif))
+	if len(vs.ThreeWayDiff) != 17 || len(vs.MergeField) != 29 || len(vs.CompareJSON) != 8 || len(vs.TransformToCif) != 13 || len(vs.MergeBatch) != 5 || len(vs.Fuse) != 7 {
+		t.Fatalf("expected 17 threeWayDiff + 29 mergeField + 8 compareJson + 13 transformToCif + 5 mergeBatch + 7 fuse vectors, got %d + %d + %d + %d + %d + %d",
+			len(vs.ThreeWayDiff), len(vs.MergeField), len(vs.CompareJSON), len(vs.TransformToCif), len(vs.MergeBatch), len(vs.Fuse))
 	}
 
 	k, ctx := newKernel(t)
 
 	for _, v := range vs.ThreeWayDiff {
 		t.Run("threeWayDiff/"+v.Name, func(t *testing.T) {
-			out, err := k.ThreeWayDiff(ctx, []byte(v.Ancestor), []byte(v.A), []byte(v.B))
+			out, err := k.threeWayDiff(ctx, []byte(v.Ancestor), []byte(v.A), []byte(v.B))
 			if v.IsErr {
 				if err == nil {
 					t.Fatalf("want error, got %s", out)
@@ -93,7 +115,7 @@ func TestKernelVectors(t *testing.T) {
 
 	for _, v := range vs.MergeField {
 		t.Run("mergeField/"+v.Name, func(t *testing.T) {
-			out, err := k.MergeField(ctx, []byte(v.Change), []byte(v.PolicyRef), []byte(v.Ctx))
+			out, err := k.mergeField(ctx, []byte(v.Change), []byte(v.PolicyRef), []byte(v.Ctx))
 			if v.IsErr {
 				if err == nil {
 					t.Fatalf("want error, got %s", out)
@@ -114,7 +136,7 @@ func TestKernelVectors(t *testing.T) {
 
 	for _, v := range vs.CompareJSON {
 		t.Run("compareJson/"+v.Name, func(t *testing.T) {
-			out, err := k.CompareJSON(ctx, []byte(v.A), []byte(v.B))
+			out, err := k.compareJSON(ctx, []byte(v.A), []byte(v.B))
 			if v.IsErr {
 				if err == nil {
 					t.Fatalf("want error, got %s", out)
@@ -136,6 +158,48 @@ func TestKernelVectors(t *testing.T) {
 	for _, v := range vs.TransformToCif {
 		t.Run("transformToCif/"+v.Name, func(t *testing.T) {
 			out, err := k.TransformToCIF(ctx, []byte(v.Source), []byte(v.Schema), v.FormatID)
+			if v.IsErr {
+				if err == nil {
+					t.Fatalf("want error, got %s", out)
+				}
+				if err.Error() != v.Expected {
+					t.Errorf("got error %q want %q", err.Error(), v.Expected)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if string(out) != v.Expected {
+				t.Errorf("got %s want %s", out, v.Expected)
+			}
+		})
+	}
+
+	for _, v := range vs.MergeBatch {
+		t.Run("mergeBatch/"+v.Name, func(t *testing.T) {
+			out, err := k.mergeBatch(ctx, []byte(v.Changelog), []byte(v.PolicyDoc), []byte(v.Ctx))
+			if v.IsErr {
+				if err == nil {
+					t.Fatalf("want error, got %s", out)
+				}
+				if err.Error() != v.Expected {
+					t.Errorf("got error %q want %q", err.Error(), v.Expected)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if string(out) != v.Expected {
+				t.Errorf("got %s want %s", out, v.Expected)
+			}
+		})
+	}
+
+	for _, v := range vs.Fuse {
+		t.Run("fuse/"+v.Name, func(t *testing.T) {
+			out, err := k.Fuse(ctx, []byte(v.Ancestor), []byte(v.A), []byte(v.B), []byte(v.PolicyDoc), []byte(v.Ctx))
 			if v.IsErr {
 				if err == nil {
 					t.Fatalf("want error, got %s", out)

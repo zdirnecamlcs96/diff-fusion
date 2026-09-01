@@ -43,16 +43,16 @@ func TestGoldenIdempotencyVectors(t *testing.T) {
 	}
 	k, ctx := newKernel(t)
 	for i, v := range vs {
-		canon, err := k.CanonicalJSON(ctx, v.Payload)
+		canon, err := k.canonicalJSON(ctx, v.Payload)
 		if err != nil {
-			t.Fatalf("vector %d CanonicalJSON: %v", i, err)
+			t.Fatalf("vector %d canonicalJSON: %v", i, err)
 		}
 		if string(canon) != v.CanonicalPayloadJSON {
 			t.Errorf("vector %d canonical: got %s want %s", i, canon, v.CanonicalPayloadJSON)
 		}
-		hex, err := k.IdempotencyKeyHex(ctx, v.CanonicalID, v.Operation, v.Payload)
+		hex, err := k.idempotencyKeyHex(ctx, v.CanonicalID, v.Operation, v.Payload)
 		if err != nil {
-			t.Fatalf("vector %d IdempotencyKeyHex: %v", i, err)
+			t.Fatalf("vector %d idempotencyKeyHex: %v", i, err)
 		}
 		if hex != v.ExpectedHex {
 			t.Errorf("vector %d hex: got %s want %s", i, hex, v.ExpectedHex)
@@ -64,7 +64,7 @@ func TestGoldenIdempotencyVectors(t *testing.T) {
 
 func TestDiffNullClearIsPresentNullAndUntouchedSideOmitted(t *testing.T) {
 	k, ctx := newKernel(t)
-	out, err := k.ThreeWayDiff(ctx,
+	out, err := k.threeWayDiff(ctx,
 		[]byte(`{"status":"draft"}`),
 		[]byte(`{"status":null}`),
 		[]byte(`{"status":"draft"}`))
@@ -82,7 +82,7 @@ func TestDiffNullClearIsPresentNullAndUntouchedSideOmitted(t *testing.T) {
 
 func TestMergeFieldAdditiveResolves(t *testing.T) {
 	k, ctx := newKernel(t)
-	out, err := k.MergeField(ctx,
+	out, err := k.mergeField(ctx,
 		[]byte(`{"path":"qty","old_value":1,"new_from_a":3,"new_from_b":4,"source":"both"}`),
 		[]byte(`{"kind":"additive"}`),
 		[]byte(`{"system_a":"x","system_b":"y"}`))
@@ -103,7 +103,7 @@ func TestMergeFieldAdditiveResolves(t *testing.T) {
 
 func TestInconsistentSourceIsError(t *testing.T) {
 	k, ctx := newKernel(t)
-	_, err := k.MergeField(ctx,
+	_, err := k.mergeField(ctx,
 		[]byte(`{"path":"qty","old_value":1,"new_from_a":3,"source":"both"}`),
 		[]byte(`{"kind":"additive"}`),
 		[]byte(`{"system_a":"x","system_b":"y"}`))
@@ -114,7 +114,7 @@ func TestInconsistentSourceIsError(t *testing.T) {
 
 func TestBadJSONIsError(t *testing.T) {
 	k, ctx := newKernel(t)
-	if _, err := k.ThreeWayDiff(ctx, []byte(`{`), []byte(`{}`), []byte(`{}`)); err == nil {
+	if _, err := k.threeWayDiff(ctx, []byte(`{`), []byte(`{}`), []byte(`{}`)); err == nil {
 		t.Error("want error for invalid JSON")
 	}
 }

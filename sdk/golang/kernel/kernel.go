@@ -29,6 +29,16 @@ type Kernel struct {
 	fns     map[string]api.Function
 }
 
+// API is the Kernel's exported surface, for host apps to mock in tests
+// without instantiating the wazero/WASM runtime.
+type API interface {
+	Close(ctx context.Context) error
+	Fuse(ctx context.Context, ancestor, a, b, policyDoc, mergeCtx []byte) ([]byte, error)
+	TransformToCIF(ctx context.Context, source, schema []byte, formatID string) ([]byte, error)
+}
+
+var _ API = (*Kernel)(nil)
+
 func New(ctx context.Context) (*Kernel, error) {
 	r := wazero.NewRuntime(ctx)
 	wasi_snapshot_preview1.MustInstantiate(ctx, r)
@@ -53,7 +63,7 @@ func New(ctx context.Context) (*Kernel, error) {
 	}
 	for _, name := range []string{
 		"df_three_way_diff", "df_merge_field", "df_canonical_json", "df_idempotency_key_hex",
-		"df_compare_json", "df_transform_to_cif",
+		"df_compare_json", "df_transform_to_cif", "df_merge_batch", "df_fuse",
 	} {
 		fn := mod.ExportedFunction(name)
 		if fn == nil {
@@ -67,19 +77,19 @@ func New(ctx context.Context) (*Kernel, error) {
 
 func (k *Kernel) Close(ctx context.Context) error { return k.runtime.Close(ctx) }
 
-func (k *Kernel) ThreeWayDiff(ctx context.Context, ancestor, a, b []byte) ([]byte, error) {
+func (k *Kernel) threeWayDiff(ctx context.Context, ancestor, a, b []byte) ([]byte, error) {
 	return k.call(ctx, "df_three_way_diff", ancestor, a, b)
 }
 
-func (k *Kernel) MergeField(ctx context.Context, change, policyRef, mergeCtx []byte) ([]byte, error) {
+func (k *Kernel) mergeField(ctx context.Context, change, policyRef, mergeCtx []byte) ([]byte, error) {
 	return k.call(ctx, "df_merge_field", change, policyRef, mergeCtx)
 }
 
-func (k *Kernel) CanonicalJSON(ctx context.Context, doc []byte) ([]byte, error) {
+func (k *Kernel) canonicalJSON(ctx context.Context, doc []byte) ([]byte, error) {
 	return k.call(ctx, "df_canonical_json", doc)
 }
 
-func (k *Kernel) CompareJSON(ctx context.Context, a, b []byte) ([]byte, error) {
+func (k *Kernel) compareJSON(ctx context.Context, a, b []byte) ([]byte, error) {
 	return k.call(ctx, "df_compare_json", a, b)
 }
 
@@ -87,9 +97,19 @@ func (k *Kernel) TransformToCIF(ctx context.Context, source, schema []byte, form
 	return k.call(ctx, "df_transform_to_cif", source, schema, []byte(formatID))
 }
 
-func (k *Kernel) IdempotencyKeyHex(ctx context.Context, canonicalID, operation string, payload []byte) (string, error) {
+func (k *Kernel) idempotencyKeyHex(ctx context.Context, canonicalID, operation string, payload []byte) (string, error) {
 	out, err := k.call(ctx, "df_idempotency_key_hex", []byte(canonicalID), []byte(operation), payload)
 	return string(out), err
+}
+
+func (k *Kernel) mergeBatch(ctx context.Context, changelog, policyDoc, mergeCtx []byte) ([]byte, error) {
+	return k.call(ctx, "df_merge_batch", changelog, policyDoc, mergeCtx)
+}
+
+// Fuse three-way merges ancestor/a/b under policyDoc, returning the merged
+// document and any conflicts.
+func (k *Kernel) Fuse(ctx context.Context, ancestor, a, b, policyDoc, mergeCtx []byte) ([]byte, error) {
+	return k.call(ctx, "df_fuse", ancestor, a, b, policyDoc, mergeCtx)
 }
 
 // envelope is the wasip1 result shape: exactly one of ok/err is set.

@@ -8,7 +8,8 @@
 //! wire boundary.
 
 use diff_fusion::drivers::wire::{
-    compare_json_impl, merge_field_impl, three_way_diff_impl, transform_to_cif_impl,
+    compare_json_impl, fuse_impl, merge_batch_impl, merge_field_impl, three_way_diff_impl,
+    transform_to_cif_impl,
 };
 use serde_json::Value;
 
@@ -25,7 +26,7 @@ fn vectors() -> Value {
 fn three_way_diff_vectors_match() {
     let v = vectors();
     let cases = v["threeWayDiff"].as_array().expect("threeWayDiff must be an array");
-    assert_eq!(cases.len(), 16, "threeWayDiff vector count changed — update this and the TS/Go counts");
+    assert_eq!(cases.len(), 17, "threeWayDiff vector count changed — update this and the TS/Go counts");
 
     for case in cases {
         let name = case["name"].as_str().unwrap();
@@ -78,6 +79,34 @@ fn merge_field_vectors_match() {
 }
 
 #[test]
+fn merge_batch_vectors_match() {
+    let v = vectors();
+    let cases = v["mergeBatch"].as_array().expect("mergeBatch must be an array");
+    assert_eq!(cases.len(), 5, "mergeBatch vector count changed — update this and the TS/Go counts");
+
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let changelog = case["changelog"].as_str().unwrap();
+        let policy_doc = case["policyDoc"].as_str().unwrap();
+        let ctx = case["ctx"].as_str().unwrap();
+        let expected = case["expected"].as_str().unwrap();
+        let is_err = case["isErr"].as_bool().unwrap();
+
+        let result = merge_batch_impl(changelog, policy_doc, ctx);
+        match result {
+            Ok(s) => {
+                assert!(!is_err, "vector '{name}': expected an error but got Ok({s})");
+                assert_eq!(s, expected, "vector '{name}': Ok output mismatch");
+            }
+            Err(e) => {
+                assert!(is_err, "vector '{name}': expected Ok but got Err({e})");
+                assert_eq!(e, expected, "vector '{name}': error message mismatch");
+            }
+        }
+    }
+}
+
+#[test]
 fn compare_json_vectors_match() {
     let v = vectors();
     let cases = v["compareJson"].as_array().expect("compareJson must be an array");
@@ -91,6 +120,36 @@ fn compare_json_vectors_match() {
         let is_err = case["isErr"].as_bool().unwrap();
 
         let result = compare_json_impl(a, b);
+        match result {
+            Ok(s) => {
+                assert!(!is_err, "vector '{name}': expected an error but got Ok({s})");
+                assert_eq!(s, expected, "vector '{name}': Ok output mismatch");
+            }
+            Err(e) => {
+                assert!(is_err, "vector '{name}': expected Ok but got Err({e})");
+                assert_eq!(e, expected, "vector '{name}': error message mismatch");
+            }
+        }
+    }
+}
+
+#[test]
+fn fuse_vectors_match() {
+    let v = vectors();
+    let cases = v["fuse"].as_array().expect("fuse must be an array");
+    assert_eq!(cases.len(), 7, "fuse vector count changed — update this and the TS/Go counts");
+
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let ancestor = case["ancestor"].as_str().unwrap();
+        let a = case["a"].as_str().unwrap();
+        let b = case["b"].as_str().unwrap();
+        let policy_doc = case["policyDoc"].as_str().unwrap();
+        let ctx = case["ctx"].as_str().unwrap();
+        let expected = case["expected"].as_str().unwrap();
+        let is_err = case["isErr"].as_bool().unwrap();
+
+        let result = fuse_impl(ancestor, a, b, policy_doc, ctx);
         match result {
             Ok(s) => {
                 assert!(!is_err, "vector '{name}': expected an error but got Ok({s})");

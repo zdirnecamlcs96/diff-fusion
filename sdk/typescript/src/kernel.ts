@@ -17,7 +17,10 @@ import {
   type MergeContext,
   type MergeOutcome,
 } from "./application/policy/index.js";
-import type { MergePolicyRef } from "./application/policy/declaration.js";
+import type {
+  MergePolicyRef,
+  PolicyDocument,
+} from "./application/policy/declaration.js";
 import type { CompareChange } from "./domain/compare.js";
 import type { TransformResult } from "./application/transform.js";
 import {
@@ -117,6 +120,98 @@ export function kernelMergeFieldRaw(
   ctx: string,
 ): string {
   return wasm.merge_field(change, ref, ctx);
+}
+
+/**
+ * Shared shape for one unresolved conflict, as emitted by both `merge_batch`
+ * and `fuse`. `class` mirrors the Rust enum's snake_case variants; `change`
+ * is the wire `FieldChange` (absent-vs-null significant), left untranslated
+ * since no domain-level conflict type exists yet for callers to consume.
+ */
+const kernelConflictSchema = z.object({
+  path: z.string(),
+  class: z.enum(["no_policy", "policy_conflict", "invariant_violation"]),
+  reason: z.string(),
+  change: wireFieldChangeSchema,
+});
+export type KernelConflict = z.infer<typeof kernelConflictSchema>;
+
+export const batchResolutionSchema = z.object({
+  resolved: z.array(z.object({ path: z.string(), value: jsonValueSchema })),
+  conflicts: z.array(kernelConflictSchema),
+});
+export type BatchResolution = z.infer<typeof batchResolutionSchema>;
+
+export function kernelMergeBatch(
+  changelog: Changelog,
+  policyDoc: PolicyDocument,
+  ctx: MergeContext,
+): BatchResolution {
+  return batchResolutionSchema.parse(
+    JSON.parse(
+      wasm.merge_batch(
+        JSON.stringify({ changes: changelog.changes.map(fieldChangeToWire) }),
+        JSON.stringify(policyDoc),
+        JSON.stringify({ system_a: ctx.system_a, system_b: ctx.system_b }),
+      ),
+    ),
+  );
+}
+
+/**
+ * Raw string passthrough for `merge_batch`, bypassing the JSON.stringify/parse
+ * the typed wrapper above does. For conformance tests that must hand the wasm
+ * boundary byte-identical input shared across runtimes, mirrors
+ * `kernelMergeFieldRaw`.
+ */
+export function kernelMergeBatchRaw(
+  changelog: string,
+  policyDoc: string,
+  ctx: string,
+): string {
+  return wasm.merge_batch(changelog, policyDoc, ctx);
+}
+
+export const fuseResultSchema = z.object({
+  value: jsonValueSchema,
+  conflicts: z.array(kernelConflictSchema),
+});
+export type FuseResult = z.infer<typeof fuseResultSchema>;
+
+export function kernelFuse(
+  ancestor: JsonValue,
+  a: JsonValue,
+  b: JsonValue,
+  policyDoc: PolicyDocument,
+  ctx: MergeContext,
+): FuseResult {
+  return fuseResultSchema.parse(
+    JSON.parse(
+      wasm.fuse(
+        JSON.stringify(ancestor),
+        JSON.stringify(a),
+        JSON.stringify(b),
+        JSON.stringify(policyDoc),
+        JSON.stringify({ system_a: ctx.system_a, system_b: ctx.system_b }),
+      ),
+    ),
+  );
+}
+
+/**
+ * Raw string passthrough for `fuse`, bypassing the JSON.stringify/parse the
+ * typed wrapper above does. For conformance tests that must hand the wasm
+ * boundary byte-identical input shared across runtimes, mirrors
+ * `kernelMergeBatchRaw`.
+ */
+export function kernelFuseRaw(
+  ancestor: string,
+  a: string,
+  b: string,
+  policyDoc: string,
+  ctx: string,
+): string {
+  return wasm.fuse(ancestor, a, b, policyDoc, ctx);
 }
 
 const compareChangeSchema = z.tuple([

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=~"
 (cd core && cargo build --target wasm32-unknown-unknown --release)
 
 # wasm-bindgen CLI must match the crate version pinned in Cargo.toml

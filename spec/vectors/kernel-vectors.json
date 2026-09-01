@@ -57,6 +57,120 @@
       "name": "malformed-b-json"
     }
   ],
+  "fuse": [
+    {
+      "a": "{\"pricing\":{\"amount\":12,\"currency\":\"usd\"}}",
+      "ancestor": "{\"pricing\":{\"amount\":10,\"currency\":\"usd\"}}",
+      "b": "{\"pricing\":{\"amount\":10,\"currency\":\"usd\"}}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"pricing\":{\"amount\":12,\"currency\":\"usd\"}}}",
+      "isErr": false,
+      "name": "all-resolved-nested-dotted-path",
+      "policyDoc": "{\"fields\":{\"pricing.amount\":{\"kind\":\"owned_by\",\"system\":\"x\"}}}"
+    },
+    {
+      "a": "{\"price\":15,\"mystery\":2}",
+      "ancestor": "{\"price\":10,\"mystery\":1}",
+      "b": "{\"price\":10,\"mystery\":1}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[{\"change\":{\"new_from_a\":2,\"old_value\":1,\"path\":\"mystery\",\"source\":\"a\"},\"class\":\"no_policy\",\"path\":\"mystery\",\"reason\":\"no policy declared for path 'mystery'\"}],\"value\":{\"mystery\":1,\"price\":15}}",
+      "isErr": false,
+      "name": "mixed-resolved-and-conflict",
+      "policyDoc": "{\"fields\":{\"price\":{\"kind\":\"owned_by\",\"system\":\"x\"}}}"
+    },
+    {
+      "a": "{\"mystery\":2}",
+      "ancestor": "{\"mystery\":1}",
+      "b": "{\"mystery\":1}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[{\"change\":{\"new_from_a\":2,\"old_value\":1,\"path\":\"mystery\",\"source\":\"a\"},\"class\":\"no_policy\",\"path\":\"mystery\",\"reason\":\"no policy declared for path 'mystery'\"}],\"value\":{\"mystery\":1}}",
+      "isErr": false,
+      "name": "no-policy-conflict",
+      "policyDoc": "{\"fields\":{}}"
+    },
+    {
+      "a": "{\"items\":[{\"sku\":\"x\",\"q\":1},{\"sku\":\"y\",\"q\":2}]}",
+      "ancestor": "{\"items\":[{\"sku\":\"x\",\"q\":1}]}",
+      "b": "{\"items\":[{\"sku\":\"x\",\"q\":1},{\"sku\":\"z\",\"q\":3}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"items\":[{\"q\":1,\"sku\":\"x\"},{\"q\":2,\"sku\":\"y\"},{\"q\":3,\"sku\":\"z\"}]}}",
+      "isErr": false,
+      "name": "set-by-key-merged-array-in-value",
+      "policyDoc": "{\"fields\":{\"items\":{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\"}}}"
+    },
+    {
+      "a": "{\"status\":null}",
+      "ancestor": "{\"status\":\"draft\"}",
+      "b": "{\"status\":\"draft\"}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"status\":null}}",
+      "isErr": false,
+      "name": "cleared-field-is-literal-null",
+      "policyDoc": "{\"fields\":{\"status\":{\"kind\":\"owned_by\",\"system\":\"x\"}}}"
+    },
+    {
+      "a": "{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"new\",\"q\":1}}}",
+      "ancestor": "{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"old\",\"q\":1}}}",
+      "b": "{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"old\",\"q\":2}}}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"new\",\"q\":2}}}}",
+      "isErr": false,
+      "name": "dotted-key-conflict-free-merge-lands-in-real-key",
+      "policyDoc": "{\"fields\":{\"items.key_2025-01-01T00:00:00\\\\.000Z_demo.name\":{\"kind\":\"owned_by\",\"system\":\"x\"},\"items.key_2025-01-01T00:00:00\\\\.000Z_demo.q\":{\"kind\":\"owned_by\",\"system\":\"y\"}}}"
+    },
+    {
+      "a": "{}",
+      "ancestor": "{bad",
+      "b": "{}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "invalid ancestor JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-ancestor-json",
+      "policyDoc": "{\"fields\":{}}"
+    }
+  ],
+  "mergeBatch": [
+    {
+      "changelog": "{\"changes\":[{\"path\":\"price\",\"old_value\":10,\"new_from_a\":15,\"source\":\"a\"},{\"path\":\"qty\",\"old_value\":5,\"new_from_a\":6,\"new_from_b\":7,\"source\":\"both\"}]}",
+      "ctx": "{\"system_a\":\"netsuite\",\"system_b\":\"shopify\"}",
+      "expected": "{\"conflicts\":[],\"resolved\":[{\"path\":\"price\",\"value\":15},{\"path\":\"qty\",\"value\":8.0}]}",
+      "isErr": false,
+      "name": "all-resolved",
+      "policyDoc": "{\"fields\":{\"price\":{\"kind\":\"owned_by\",\"system\":\"netsuite\"},\"qty\":{\"kind\":\"additive\"}}}"
+    },
+    {
+      "changelog": "{\"changes\":[{\"path\":\"price\",\"old_value\":10,\"new_from_a\":15,\"source\":\"a\"},{\"path\":\"status\",\"old_value\":\"closed\",\"new_from_a\":\"draft\",\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"netsuite\",\"system_b\":\"shopify\"}",
+      "expected": "{\"conflicts\":[{\"change\":{\"new_from_a\":\"draft\",\"old_value\":\"closed\",\"path\":\"status\",\"source\":\"a\"},\"class\":\"policy_conflict\",\"path\":\"status\",\"reason\":\"state_machine: illegal transition 'closed' -> 'draft'\"}],\"resolved\":[{\"path\":\"price\",\"value\":15}]}",
+      "isErr": false,
+      "name": "mixed-resolved-and-policy-conflict",
+      "policyDoc": "{\"fields\":{\"price\":{\"kind\":\"owned_by\",\"system\":\"netsuite\"},\"status\":{\"kind\":\"state_machine\",\"transitions\":[{\"from\":\"draft\",\"to\":\"open\"}]}}}"
+    },
+    {
+      "changelog": "{\"changes\":[{\"path\":\"mystery\",\"old_value\":1,\"new_from_a\":2,\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[{\"change\":{\"new_from_a\":2,\"old_value\":1,\"path\":\"mystery\",\"source\":\"a\"},\"class\":\"no_policy\",\"path\":\"mystery\",\"reason\":\"no policy declared for path 'mystery'\"}],\"resolved\":[]}",
+      "isErr": false,
+      "name": "no-policy-conflict",
+      "policyDoc": "{\"fields\":{}}"
+    },
+    {
+      "changelog": "{\"changes\":[{\"path\":\"status\",\"old_value\":\"draft\",\"new_from_a\":null,\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[{\"change\":{\"new_from_a\":null,\"old_value\":\"draft\",\"path\":\"status\",\"source\":\"a\"},\"class\":\"no_policy\",\"path\":\"status\",\"reason\":\"no policy declared for path 'status'\"}],\"resolved\":[]}",
+      "isErr": false,
+      "name": "absent-vs-null-echoed-in-conflict",
+      "policyDoc": "{\"fields\":{}}"
+    },
+    {
+      "changelog": "{\"changes\":[{\"path\":\"price\",\"old_value\":10,\"new_from_a\":15,\"source\":\"a\"},{\"path\":\"status\",\"old_value\":\"draft\",\"new_from_b\":\"open\",\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"netsuite\",\"system_b\":\"shopify\"}",
+      "expected": "change[1]: inconsistent change: source 'a' but new_from_a is absent",
+      "isErr": true,
+      "name": "error-inconsistent-change-names-index",
+      "policyDoc": "{\"fields\":{\"price\":{\"kind\":\"owned_by\",\"system\":\"netsuite\"}}}"
+    }
+  ],
   "mergeField": [
     {
       "change": "{\"path\":\"price\",\"old_value\":10,\"new_from_a\":15,\"source\":\"a\"}",
@@ -395,6 +509,14 @@
       "expected": "{\"changes\":[{\"path\":\"a\",\"old_value\":1,\"new_from_a\":10,\"source\":\"a\"},{\"path\":\"b\",\"old_value\":2,\"new_from_b\":20,\"source\":\"b\"}]}",
       "isErr": false,
       "name": "multi-field-mixed-sources-untouched-field-omitted"
+    },
+    {
+      "a": "{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"new\"}}}",
+      "ancestor": "{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"old\"}}}",
+      "b": "{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"old\"}}}",
+      "expected": "{\"changes\":[{\"path\":\"items.key_2025-01-01T00:00:00\\\\.000Z_demo.name\",\"old_value\":\"old\",\"new_from_a\":\"new\",\"source\":\"a\"}]}",
+      "isErr": false,
+      "name": "dotted-object-key-path-is-escaped"
     },
     {
       "a": "{}",

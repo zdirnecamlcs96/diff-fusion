@@ -9,12 +9,11 @@ run by [wazero](https://wazero.io) (pure Go, zero cgo).
 
     k, err := kernel.New(ctx)
     defer k.Close(ctx)
-    out, err := k.ThreeWayDiff(ctx, ancestor, a, b) // JSON bytes in/out
+    out, err := k.Fuse(ctx, ancestor, a, b, policyDoc, mergeCtx) // JSON bytes in/out -> {"value":...,"conflicts":[...]}
 
-Four functions: `ThreeWayDiff`, `MergeField`, `CanonicalJSON`,
-`IdempotencyKeyHex`. Wire contract (wire shapes, policy config, merge
-outcome) is pinned by `../../spec/schema/`; conformance by
-`../../spec/vectors/` — the Rust generator is the sole producer.
+Three methods: `Fuse`, `TransformToCIF`, `Close`. Wire contract (wire shapes,
+policy config, merge outcome) is pinned by `../../spec/schema/`; conformance
+by `../../spec/vectors/` — the Rust generator is the sole producer.
 
 A `Kernel` is not goroutine-safe; create one per goroutine or pool.
 

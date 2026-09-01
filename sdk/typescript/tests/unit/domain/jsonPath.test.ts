@@ -1,6 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { setAtPath } from "../../../src/domain/jsonPath.js";
+import { escapeSegment, setAtPath, splitPath } from "../../../src/domain/jsonPath.js";
 import type { JsonValue } from "../../../src/domain/types.js";
+
+describe("escapeSegment / splitPath", () => {
+  it("plain segments round-trip like split-on-dot", () => {
+    const joined = `${escapeSegment("a")}.${escapeSegment("b")}`;
+    expect(joined).toBe("a.b");
+    expect(splitPath(joined)).toEqual(["a", "b"]);
+  });
+
+  it("dotted key round-trips through escape and split, landing in the real key", () => {
+    const key = "key_2025-01-01T00:00:00.000Z_demo";
+    const joined = `items.${escapeSegment(key)}.name`;
+    expect(joined).toBe("items.key_2025-01-01T00:00:00\\.000Z_demo.name");
+    expect(splitPath(joined)).toEqual(["items", key, "name"]);
+
+    const v: JsonValue = { items: { [key]: { name: "old" } } };
+    setAtPath(v, joined, "new");
+    expect(v).toEqual({ items: { [key]: { name: "new" } } });
+    // No phantom branch from the unescaped prefix before the literal dot.
+    expect((v as { items: Record<string, unknown> }).items["key_2025-01-01T00:00:00"]).toBeUndefined();
+  });
+
+  it("backslash key round-trips", () => {
+    const key = "weird\\key";
+    const joined = escapeSegment(key);
+    expect(joined).toBe("weird\\\\key");
+    expect(splitPath(joined)).toEqual([key]);
+  });
+
+  it("trailing lone backslash is kept literal deterministically", () => {
+    expect(splitPath("a\\")).toEqual(["a\\"]);
+  });
+});
 
 describe("setAtPath", () => {
   it("empty path is a no-op", () => {
