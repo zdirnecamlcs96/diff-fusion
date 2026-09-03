@@ -61,6 +61,38 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDetectNilAncestorUsesA pins that a nil/empty ancestor makes Detect use a
+// as the ancestor, matching Detect(a, a, b) byte-for-byte.
+func TestDetectNilAncestorUsesA(t *testing.T) {
+	a := Entity{StockCode: "A1", Quantity: 3, Note: "local"}
+	b := a
+	b.Quantity = 5
+
+	aCIF, err := TransformIn("erp", a)
+	if err != nil {
+		t.Fatalf("TransformIn(a): %v", err)
+	}
+	bCIF, err := TransformIn("erp", b)
+	if err != nil {
+		t.Fatalf("TransformIn(b): %v", err)
+	}
+
+	got, err := Detect(CIF{}, aCIF, bCIF)
+	if err != nil {
+		t.Fatalf("Detect(nil ancestor): %v", err)
+	}
+	want, err := Detect(aCIF, aCIF, bCIF)
+	if err != nil {
+		t.Fatalf("Detect(a, a, b): %v", err)
+	}
+	if string(got.RawMessage) != string(want.RawMessage) {
+		t.Fatalf("got %s want %s", got.RawMessage, want.RawMessage)
+	}
+	if string(got.RawMessage) == "" || string(got.RawMessage) == `{"changes":[]}` {
+		t.Fatalf("want non-empty changelog, got %s", got.RawMessage)
+	}
+}
+
 // TestResolveOutputKeepsRawValue pins that embedding json.RawMessage promotes
 // UnmarshalJSON: Resolve decodes the kernel's {"value":...} into a CIF unchanged.
 func TestResolveOutputKeepsRawValue(t *testing.T) {

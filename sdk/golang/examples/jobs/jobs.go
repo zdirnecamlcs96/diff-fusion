@@ -60,7 +60,14 @@ func TransformIn[E any](format string, entity E) (CIF, error) {
 }
 
 // Detect: step 2. Three CIF documents -> Changelog, via kernel.ThreeWayDiff.
+// Nil/empty ancestor means "no stored baseline": a is used as the ancestor, so a
+// never appears changed and b wins on every differing field; both-changed
+// conflicts cannot fire in this mode. Caller must then also pass a as
+// ResolveInput.Ancestor, because Resolve has no way to recover it.
 func Detect(ancestor, a, b CIF) (Changelog, error) {
+	if len(ancestor.RawMessage) == 0 {
+		ancestor = a
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	out, err := k().ThreeWayDiff(context.Background(), ancestor.RawMessage, a.RawMessage, b.RawMessage)
