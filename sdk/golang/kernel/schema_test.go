@@ -9,59 +9,68 @@ import (
 	"time"
 )
 
-func TestSchemaFromStruct(t *testing.T) {
-	type Dimensions struct {
-		Width  float64 `cif:"width" a:"w"`
-		Height float64 `cif:"height" a:"h"`
+// TestSchemaFromStructHubspotGolden mirrors the sdk/golang/examples/schema
+// hubspot example: a native struct with a transparent (untagged) nested
+// struct, a cif-tagged nested struct, a cif-tagged slice of struct, a
+// required leaf, and a local-only (no cif tag) leaf.
+func TestSchemaFromStructHubspotGolden(t *testing.T) {
+	type Address struct {
+		City string `json:"city" cif:"city"`
+		Zip  string `json:"zip" cif:"zip"`
 	}
-	type Item struct {
-		SKU        string     `cif:"sku,required" a:"sku"`
-		Note       string     `cif:"note" b:"note"` // present for a's cif_schema but no source_path under "a"
-		unexported string     `cif:"unexported"`    // unexported: must be skipped even with a cif tag
-		Dimensions Dimensions `cif:"dimensions" a:"dims"`
+	type Tag struct {
+		Name string `json:"name" cif:"label"`
 	}
-	type Doc struct {
-		Items []Item `cif:"items" a:"lines"`
-		Skip  string // no cif tag: omitted entirely
+	type HubspotContact struct {
+		Properties struct {
+			Email   string  `json:"email" cif:"email,required"`
+			Phone   string  `json:"phone" cif:"phone"`
+			Address Address `json:"address" cif:"address"`
+		} `json:"properties"` // transparent: no cif tag
+		Tags    []Tag `json:"tags" cif:"tags"`
+		HsScore int   `json:"hs_score"` // no cif tag: local-only, skipped
 	}
 
-	got, err := SchemaFromStruct(Doc{}, "a")
+	got, err := SchemaFromStruct(HubspotContact{}, "hubspot")
 	if err != nil {
 		t.Fatalf("SchemaFromStruct: %v", err)
 	}
 
 	want := `{
 		"cif_schema": {
-			"items": {
+			"email": {"type": "string", "required": true},
+			"phone": {"type": "string"},
+			"address": {
+				"type": "object",
+				"children": {
+					"city": {"type": "string"},
+					"zip": {"type": "string"}
+				}
+			},
+			"tags": {
 				"type": "array",
 				"element": {
-					"sku": {"type": "string", "required": true},
-					"note": {"type": "string"},
-					"dimensions": {
-						"type": "object",
-						"children": {
-							"width": {"type": "number"},
-							"height": {"type": "number"}
-						}
-					}
+					"label": {"type": "string"}
 				}
 			}
 		},
 		"transformations": {
-			"a": {
-				"items": {
-					"source_path": "lines",
+			"hubspot": {
+				"email": {"source_path": "properties.email", "type": "string"},
+				"phone": {"source_path": "properties.phone", "type": "string"},
+				"address": {
+					"source_path": "properties.address",
+					"type": "object",
+					"children": {
+						"city": {"source_path": "city", "type": "string"},
+						"zip": {"source_path": "zip", "type": "string"}
+					}
+				},
+				"tags": {
+					"source_path": "tags",
 					"type": "array",
 					"element": {
-						"sku": {"source_path": "sku", "type": "string"},
-						"dimensions": {
-							"source_path": "dims",
-							"type": "object",
-							"children": {
-								"width": {"source_path": "w", "type": "number"},
-								"height": {"source_path": "h", "type": "number"}
-							}
-						}
+						"label": {"source_path": "name", "type": "string"}
 					}
 				}
 			}
@@ -71,20 +80,196 @@ func TestSchemaFromStruct(t *testing.T) {
 	assertJSONEqual(t, got, []byte(want))
 }
 
-func TestSchemaFromStructPointerInput(t *testing.T) {
+func TestSchemaFromStructTransparentStruct(t *testing.T) {
 	type Doc struct {
-		Name string `cif:"name,required" a:"n"`
+		Properties struct {
+			Name string `json:"name" cif:"name"`
+		} `json:"properties"` // no cif tag: transparent
 	}
-	got, err := SchemaFromStruct(&Doc{}, "a")
+	got, err := SchemaFromStruct(Doc{}, "f")
 	if err != nil {
 		t.Fatalf("SchemaFromStruct: %v", err)
 	}
-	want := `{"cif_schema":{"name":{"type":"string","required":true}},"transformations":{"a":{"name":{"source_path":"n","type":"string"}}}}`
+	want := `{"cif_schema":{"name":{"type":"string"}},"transformations":{"f":{"name":{"source_path":"properties.name","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+// TestSchemaFromStructEmbeddedPromoted asserts an embedded struct with no
+// json tag is promoted like encoding/json does: its fields land at the
+// parent's own path, with no "Base." prefix. An embedded struct WITH a json
+// tag is a named key, so it still gets the usual transparent-field prefix.
+func TestSchemaFromStructEmbeddedPromoted(t *testing.T) {
+	type Base struct {
+		ID string `json:"id" cif:"id,required"`
+	}
+	type Rec struct {
+		Base
+		Name string `json:"name" cif:"name"`
+	}
+	got, err := SchemaFromStruct(Rec{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{
+		"cif_schema": {
+			"id": {"type": "string", "required": true},
+			"name": {"type": "string"}
+		},
+		"transformations": {
+			"f": {
+				"id": {"source_path": "id", "type": "string"},
+				"name": {"source_path": "name", "type": "string"}
+			}
+		}
+	}`
+	assertJSONEqual(t, got, []byte(want))
+
+	type RecTagged struct {
+		Base `json:"base"`
+		Name string `json:"name" cif:"name"`
+	}
+	got, err = SchemaFromStruct(RecTagged{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want = `{
+		"cif_schema": {
+			"id": {"type": "string", "required": true},
+			"name": {"type": "string"}
+		},
+		"transformations": {
+			"f": {
+				"id": {"source_path": "base.id", "type": "string"},
+				"name": {"source_path": "name", "type": "string"}
+			}
+		}
+	}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructJSONDashSkipsField(t *testing.T) {
+	type Doc struct {
+		Name string `json:"-" cif:"name"` // json:"-": skipped entirely, even though cif-tagged
+		Kept string `json:"kept" cif:"kept"`
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"kept":{"type":"string"}},"transformations":{"f":{"kept":{"source_path":"kept","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructNoJSONTagUsesFieldName(t *testing.T) {
+	type Doc struct {
+		Name string `cif:"name"` // no json tag: source key is the exact Go field name
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"name":{"type":"string"}},"transformations":{"f":{"name":{"source_path":"Name","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructEscapesDottedJSONKey(t *testing.T) {
+	type Doc struct {
+		Name string `json:"a.b" cif:"name"`
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"name":{"type":"string"}},"transformations":{"f":{"name":{"source_path":"a\\.b","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructRequiredFlag(t *testing.T) {
+	type Doc struct {
+		Name string `json:"name" cif:"name,required"`
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"name":{"type":"string","required":true}},"transformations":{"f":{"name":{"source_path":"name","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructUntaggedLeafSkipped(t *testing.T) {
+	type Doc struct {
+		Name string `json:"name" cif:"name"`
+		Skip string `json:"skip"` // no cif tag: local-only, skipped
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"name":{"type":"string"}},"transformations":{"f":{"name":{"source_path":"name","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructUntaggedSliceSkipped(t *testing.T) {
+	type Item struct {
+		X string `json:"x" cif:"x"`
+	}
+	type Doc struct {
+		Name  string `json:"name" cif:"name"`
+		Items []Item `json:"items"` // no cif tag: an array can't be flattened, skipped
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"name":{"type":"string"}},"transformations":{"f":{"name":{"source_path":"name","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructDuplicateFieldName(t *testing.T) {
+	type Bad struct {
+		A string `json:"a" cif:"same"`
+		B string `json:"b" cif:"same"`
+	}
+	_, err := SchemaFromStruct(Bad{}, "f")
+	if err == nil {
+		t.Fatal("want error for duplicate cif field name")
+	}
+	if !strings.Contains(err.Error(), `duplicate cif field name "same"`) {
+		t.Fatalf("want error about duplicate cif field name, got: %v", err)
+	}
+}
+
+func TestSchemaFromStructDuplicateFieldNameViaTransparency(t *testing.T) {
+	type Inner struct {
+		X string `json:"x" cif:"same"`
+	}
+	type Doc struct {
+		A Inner  `json:"a"` // transparent
+		B string `json:"b" cif:"same"`
+	}
+	_, err := SchemaFromStruct(Doc{}, "f")
+	if err == nil {
+		t.Fatal("want error for duplicate cif field name via transparency")
+	}
+	if !strings.Contains(err.Error(), `duplicate cif field name "same"`) {
+		t.Fatalf("want error about duplicate cif field name, got: %v", err)
+	}
+}
+
+func TestSchemaFromStructPointerInput(t *testing.T) {
+	type Doc struct {
+		Name string `json:"name" cif:"name,required"`
+	}
+	got, err := SchemaFromStruct(&Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"name":{"type":"string","required":true}},"transformations":{"f":{"name":{"source_path":"name","type":"string"}}}}`
 	assertJSONEqual(t, got, []byte(want))
 }
 
 func TestSchemaFromStructNonStructInput(t *testing.T) {
-	_, err := SchemaFromStruct("not a struct")
+	_, err := SchemaFromStruct("not a struct", "f")
 	if err == nil {
 		t.Fatal("want error for non-struct input")
 	}
@@ -94,7 +279,7 @@ func TestSchemaFromStructUnsupportedFieldKind(t *testing.T) {
 	type Bad struct {
 		Fn func() `cif:"fn"`
 	}
-	_, err := SchemaFromStruct(Bad{})
+	_, err := SchemaFromStruct(Bad{}, "f")
 	if err == nil {
 		t.Fatal("want error for unsupported field kind")
 	}
@@ -104,7 +289,7 @@ func TestSchemaFromStructUnsupportedTimeField(t *testing.T) {
 	type Bad struct {
 		At time.Time `cif:"at"`
 	}
-	_, err := SchemaFromStruct(Bad{})
+	_, err := SchemaFromStruct(Bad{}, "f")
 	if err == nil {
 		t.Fatal("want error for time.Time field")
 	}
@@ -115,7 +300,7 @@ func TestSchemaFromStructUnsupportedTimeField(t *testing.T) {
 	type BadPtr struct {
 		At *time.Time `cif:"at"`
 	}
-	_, err = SchemaFromStruct(BadPtr{})
+	_, err = SchemaFromStruct(BadPtr{}, "f")
 	if err == nil {
 		t.Fatal("want error for *time.Time field")
 	}
@@ -128,7 +313,7 @@ func TestSchemaFromStructUnsupportedMapField(t *testing.T) {
 	type Bad struct {
 		Attrs map[string]string `cif:"attrs"`
 	}
-	_, err := SchemaFromStruct(Bad{})
+	_, err := SchemaFromStruct(Bad{}, "f")
 	if err == nil {
 		t.Fatal("want error for map field")
 	}
@@ -144,7 +329,7 @@ func TestSchemaFromStructEmptyNestedObject(t *testing.T) {
 	type Doc struct {
 		Nested Empty `cif:"nested"`
 	}
-	_, err := SchemaFromStruct(Doc{})
+	_, err := SchemaFromStruct(Doc{}, "f")
 	if err == nil {
 		t.Fatal("want error for nested struct with no cif-tagged fields")
 	}
@@ -164,26 +349,12 @@ func TestSchemaFromStructUnsupportedMarshalerField(t *testing.T) {
 	type Bad struct {
 		ID marshalerID `cif:"id"`
 	}
-	_, err := SchemaFromStruct(Bad{})
+	_, err := SchemaFromStruct(Bad{}, "f")
 	if err == nil {
 		t.Fatal("want error for json.Marshaler field")
 	}
 	if !strings.Contains(err.Error(), "json.Marshaler") {
 		t.Fatalf("want error about json.Marshaler, got: %v", err)
-	}
-}
-
-func TestSchemaFromStructDuplicateFieldName(t *testing.T) {
-	type Bad struct {
-		A string `cif:"same"`
-		B string `cif:"same"`
-	}
-	_, err := SchemaFromStruct(Bad{})
-	if err == nil {
-		t.Fatal("want error for duplicate cif field name")
-	}
-	if !strings.Contains(err.Error(), `duplicate cif field name "same"`) {
-		t.Fatalf("want error about duplicate cif field name, got: %v", err)
 	}
 }
 
@@ -194,7 +365,7 @@ func TestSchemaFromStructEmptyArrayElement(t *testing.T) {
 	type Doc struct {
 		Items []Empty `cif:"items"`
 	}
-	_, err := SchemaFromStruct(Doc{})
+	_, err := SchemaFromStruct(Doc{}, "f")
 	if err == nil {
 		t.Fatal("want error for array element struct with no cif-tagged fields")
 	}
@@ -207,7 +378,7 @@ func TestSchemaFromStructUnsupportedArrayElementKind(t *testing.T) {
 	type Doc struct {
 		Grid [][]string `cif:"grid"`
 	}
-	_, err := SchemaFromStruct(Doc{})
+	_, err := SchemaFromStruct(Doc{}, "f")
 	if err == nil {
 		t.Fatal("want error for array of array element")
 	}
@@ -220,7 +391,7 @@ func TestSchemaFromStructRecursiveType(t *testing.T) {
 	type Node struct {
 		Next *Node `cif:"next"`
 	}
-	_, err := SchemaFromStruct(Node{})
+	_, err := SchemaFromStruct(Node{}, "f")
 	if err == nil {
 		t.Fatal("want error for recursive type")
 	}
@@ -233,7 +404,7 @@ func TestSchemaFromStructRootEmptySchema(t *testing.T) {
 	type Doc struct {
 		Untagged string // no cif tag
 	}
-	_, err := SchemaFromStruct(Doc{})
+	_, err := SchemaFromStruct(Doc{}, "f")
 	if err == nil {
 		t.Fatal("want error for root struct with no cif-tagged fields")
 	}
@@ -246,7 +417,7 @@ func TestSchemaFromStructInvalidCifTagOption(t *testing.T) {
 	type Bad struct {
 		Name string `cif:"name,requierd"`
 	}
-	_, err := SchemaFromStruct(Bad{})
+	_, err := SchemaFromStruct(Bad{}, "f")
 	if err == nil {
 		t.Fatal("want error for misspelled cif tag option")
 	}
@@ -257,7 +428,7 @@ func TestSchemaFromStructInvalidCifTagOption(t *testing.T) {
 	type BadSpace struct {
 		Name string `cif:"name, required"` // leading space before "required"
 	}
-	_, err = SchemaFromStruct(BadSpace{})
+	_, err = SchemaFromStruct(BadSpace{}, "f")
 	if err == nil {
 		t.Fatal("want error for cif tag option with leading space")
 	}
@@ -266,9 +437,19 @@ func TestSchemaFromStructInvalidCifTagOption(t *testing.T) {
 	}
 }
 
+func TestSchemaFromStructEmptyFormatRejected(t *testing.T) {
+	type Doc struct {
+		Name string `json:"name" cif:"name"`
+	}
+	_, err := SchemaFromStruct(Doc{}, "")
+	if err == nil {
+		t.Fatal("want error for empty format")
+	}
+}
+
 func TestSchemaFromStructReservedFormatName(t *testing.T) {
 	type Doc struct {
-		Name string `cif:"name" x:"n"`
+		Name string `json:"name" cif:"name"`
 	}
 	_, err := SchemaFromStruct(Doc{}, "cif")
 	if err == nil {
@@ -291,7 +472,7 @@ func TestSchemaFromStructUnsupportedMarshalerArrayElement(t *testing.T) {
 	type Doc struct {
 		Statuses []marshalerStatus `cif:"statuses"`
 	}
-	_, err := SchemaFromStruct(Doc{})
+	_, err := SchemaFromStruct(Doc{}, "f")
 	if err == nil {
 		t.Fatal("want error for array of json.Marshaler scalar type")
 	}
@@ -315,11 +496,14 @@ func assertJSONEqual(t *testing.T, got, want []byte) {
 }
 
 // TestSchemaFromStructParityWithVector proves a schema derived from a
-// tagged Go struct produces the exact same TransformToCIF output as the
+// native Go struct produces the exact same TransformToCIF output as the
 // hand-written vector schema, for the
 // "array-of-objects-with-nested-children-composing" transformToCif vector
 // (spec/vectors/kernel-vectors.json): array-of-objects elements composing
 // with a nested object, plus an object composing a nested array of objects.
+// The struct mirrors the vector's ENTITY shape (its json tags match the
+// vector's source document keys) with cif tags naming the vector's CIF
+// fields.
 func TestSchemaFromStructParityWithVector(t *testing.T) {
 	raw, err := os.ReadFile("../../../spec/vectors/kernel-vectors.json")
 	if err != nil {
@@ -340,30 +524,29 @@ func TestSchemaFromStructParityWithVector(t *testing.T) {
 		t.Fatal("vector not found: array-of-objects-with-nested-children-composing")
 	}
 
-	// Reproduces the vector's schema:
+	// Reproduces the vector's source document / schema:
+	//   {"lines": [{"sku": ..., "dims": {"w": ..., "h": ...}}], "vendor": {"name": ..., "addrs": [{"city": ...}]}}
 	//   items:    array<{sku: string, dimensions: {width, height: number}}>
 	//   supplier: object{name: string, addresses: array<{city: string}>}
-	type Dimensions struct {
-		Width  float64 `cif:"width" f:"w"`
-		Height float64 `cif:"height" f:"h"`
-	}
 	type Item struct {
-		SKU        string     `cif:"sku" f:"sku"`
-		Dimensions Dimensions `cif:"dimensions" f:"dims"`
-	}
-	type Address struct {
-		City string `cif:"city" f:"city"`
+		SKU        string `json:"sku" cif:"sku"`
+		Dimensions struct {
+			Width  float64 `json:"w" cif:"width"`
+			Height float64 `json:"h" cif:"height"`
+		} `json:"dims" cif:"dimensions"`
 	}
 	type Supplier struct {
-		Name      string    `cif:"name" f:"name"`
-		Addresses []Address `cif:"addresses" f:"addrs"`
+		Name      string `json:"name" cif:"name"`
+		Addresses []struct {
+			City string `json:"city" cif:"city"`
+		} `json:"addrs" cif:"addresses"`
 	}
-	type Doc struct {
-		Items    []Item   `cif:"items" f:"lines"`
-		Supplier Supplier `cif:"supplier" f:"vendor"`
+	type Entity struct {
+		Items    []Item   `json:"lines" cif:"items"`
+		Supplier Supplier `json:"vendor" cif:"supplier"`
 	}
 
-	derived, err := SchemaFromStruct(Doc{}, v.FormatID)
+	derived, err := SchemaFromStruct(Entity{}, v.FormatID)
 	if err != nil {
 		t.Fatalf("SchemaFromStruct: %v", err)
 	}

@@ -35,70 +35,66 @@ delivery only.
 ## SchemaFromStruct
 
 `kernel.SchemaFromStruct` derives the CIF schema JSON that `TransformToCIF`
-expects from a tagged Go struct, instead of hand-writing schema.json:
+expects from your system's own native struct — the one you already
+`json.Marshal`/`Unmarshal` — instead of hand-writing schema.json:
 
-    type Item struct {
-        SKU string  `cif:"sku,required" hubspot:"properties.sku" salesforce:"StockKeepingUnit"`
-        Qty float64 `cif:"qty" hubspot:"properties.quantity"`   // no salesforce tag: local-only there
-    }
-    type Doc struct {
-        Items []Item `cif:"items" hubspot:"lineItems" salesforce:"."`
+    type HubspotContact struct {
+        Properties struct {
+            Email string `json:"email" cif:"email,required"`
+            Phone string `json:"phone" cif:"phone"`
+        } `json:"properties"`          // no cif tag: transparent
+        HsScore int `json:"hs_score"`  // no cif tag: local-only, skipped
     }
 
-    schema, err := kernel.SchemaFromStruct(Doc{}, "hubspot", "salesforce")
+    schema, err := kernel.SchemaFromStruct(new(HubspotContact), "hubspot")
     out, err := k.TransformToCIF(ctx, source, schema, "hubspot")
 
-`cif:"<field>[,required]"` names the CIF field (`cif:"-"` or no tag skips
-it); each format passed to `SchemaFromStruct` reads its source path from the
-struct tag of that same name, so a field can be mapped in one format and
-omitted (local-only) in another.
+`format` (here `"hubspot"`) is the `format_id` key `TransformToCIF`/
+`TransformFromCIF` select by; it can't be empty or `"cif"` (reserved).
+
+Each field's source path comes from its `json` tag name (or the exact Go
+field name if there's no `json` tag — no case folding); `json:"-"` skips the
+field entirely. A literal `.` or `\` in that key is escaped the same way
+`core/src/domain/json_path.rs` does, so it survives as part of the key.
+
+`cif:"<field>[,required]"` puts the field in the CIF document as
+`<field>`; `cif:"-"` skips it. A struct/`*struct` field with **no** `cif`
+tag is transparent: it isn't a CIF node itself, but its own fields are
+walked as if declared on the parent, with source paths prefixed by its own
+key (`properties.email` above) — that's how one native struct maps its
+whole shape without repeating `cif:"-"` everywhere. A scalar or slice field
+with no `cif` tag is simply local-only and skipped (`hs_score` above).
 
 What it emits (pretty-printed here for readability; the real call produces
 compact JSON) for the struct above:
 
     {
       "cif_schema": {
-        "items": {
-          "type": "array",
-          "element": {
-            "qty": { "type": "number" },
-            "sku": { "type": "string", "required": true }
-          }
-        }
+        "email": { "type": "string", "required": true },
+        "phone": { "type": "string" }
       },
       "transformations": {
         "hubspot": {
-          "items": {
-            "source_path": "lineItems",
-            "type": "array",
-            "element": {
-              "qty": { "source_path": "properties.quantity", "type": "number" },
-              "sku": { "source_path": "properties.sku", "type": "string" }
-            }
-          }
-        },
-        "salesforce": {
-          "items": {
-            "source_path": ".",
-            "type": "array",
-            "element": {
-              "sku": { "source_path": "StockKeepingUnit", "type": "string" }
-            }
-          }
+          "email": { "source_path": "properties.email", "type": "string" },
+          "phone": { "source_path": "properties.phone", "type": "string" }
         }
       }
     }
 
-A source path of `"."` means "the current scope" — the kernel convention
-used when a format's substructure already matches the enclosing element.
-
-- Nested objects must be a struct with cif-tagged fields — map fields are
-  rejected, and a struct with zero cif-tagged fields is rejected (an opaque
-  `{"type":"object"}` with no declared schema isn't allowed).
+- Nested objects must be a `cif`-tagged struct with `cif`-tagged fields of
+  its own — map fields are rejected, and a struct with zero `cif`-tagged
+  fields is rejected (an opaque `{"type":"object"}` with no declared schema
+  isn't allowed).
+- Slice/array elements must be primitive scalars or `cif`-tagged structs; a
+  slice with no `cif` tag is skipped (an array can't be flattened).
 - Time fields must be declared as `string` holding a UTC RFC 3339 timestamp;
   `time.Time` fields are rejected.
 - `any`/interface fields are rejected — declare a concrete schema type.
 - Types implementing `json.Marshaler` are rejected — reflection can't see
   their custom JSON shape; declare the field with the marshaled type instead
   (e.g. `string`).
-- Duplicate `cif` field names within the same struct are rejected.
+- Duplicate `cif` field names within the same CIF scope are rejected,
+  including two different native fields landing on the same name via
+  transparency.
+- Embedded structs without a `json` tag are promoted like `encoding/json`
+  does: their fields are walked with no extra path segment.

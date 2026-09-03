@@ -38,9 +38,11 @@ type CIF struct{ json.RawMessage }
 // Changelog is Detect's output and Resolve's input ({"changes":[...]}).
 type Changelog struct{ json.RawMessage }
 
-// TransformIn: step 1. entity -> CIF. D = cif-tagged doc struct (schema via kernel.SchemaFromStruct(new(D), format)), E = entity type.
-func TransformIn[D, E any](format string, entity E) (CIF, error) {
-	schema, err := kernel.SchemaFromStruct(new(D), format)
+// TransformIn: step 1. entity -> CIF. E is the caller's own struct, already
+// used for its system's json.Marshal/Unmarshal; its cif tags derive the
+// schema via kernel.SchemaFromStruct(new(E), format).
+func TransformIn[E any](format string, entity E) (CIF, error) {
+	schema, err := kernel.SchemaFromStruct(new(E), format)
 	if err != nil {
 		return CIF{}, err
 	}
@@ -102,10 +104,13 @@ func Resolve(in ResolveInput) (ResolveOutput, error) {
 	return res, nil
 }
 
-// TransformOut: step 4. CIF -> entity. Applies the mapped source paths onto `into` and returns it;
-// unmapped fields on `into` are untouched (update-not-replace). Via kernel.TransformFromCIF then json.Unmarshal.
-func TransformOut[D, E any](format string, cif CIF, into E) (E, error) {
-	schema, err := kernel.SchemaFromStruct(new(D), format)
+// TransformOut: step 4. CIF -> entity. E is the caller's own struct (same one
+// TransformIn used); its cif tags derive the schema via
+// kernel.SchemaFromStruct(new(E), format). Applies the mapped source paths onto
+// `into` and returns it; unmapped fields on `into` are untouched (update-not-replace).
+// Via kernel.TransformFromCIF then json.Unmarshal.
+func TransformOut[E any](format string, cif CIF, into E) (E, error) {
+	schema, err := kernel.SchemaFromStruct(new(E), format)
 	if err != nil {
 		return into, err
 	}

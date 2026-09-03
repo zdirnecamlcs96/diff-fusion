@@ -5,15 +5,10 @@ import (
 	"testing"
 )
 
-type Doc struct {
-	SKU string  `cif:"sku,required" erp:"stock_code"`
-	Qty float64 `cif:"qty"          erp:"quantity"`
-}
-
 type Entity struct {
-	StockCode string  `json:"stock_code"`
-	Quantity  float64 `json:"quantity"`
-	Note      string  `json:"note"` // local-only: never crosses
+	StockCode string  `json:"stock_code" cif:"sku,required"`
+	Quantity  float64 `json:"quantity"   cif:"qty"`
+	Note      string  `json:"note"` // no cif tag: local-only, never crosses
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -23,15 +18,15 @@ func TestRoundTrip(t *testing.T) {
 	theirs := ancestor
 	theirs.StockCode = "A1-R"
 
-	ancestorCIF, err := TransformIn[Doc]("erp", ancestor)
+	ancestorCIF, err := TransformIn("erp", ancestor)
 	if err != nil {
 		t.Fatalf("TransformIn(ancestor): %v", err)
 	}
-	mineCIF, err := TransformIn[Doc]("erp", mine)
+	mineCIF, err := TransformIn("erp", mine)
 	if err != nil {
 		t.Fatalf("TransformIn(mine): %v", err)
 	}
-	theirsCIF, err := TransformIn[Doc]("erp", theirs)
+	theirsCIF, err := TransformIn("erp", theirs)
 	if err != nil {
 		t.Fatalf("TransformIn(theirs): %v", err)
 	}
@@ -56,7 +51,7 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("want no conflicts, got %s", out.Conflicts)
 	}
 
-	got, err := TransformOut[Doc]("erp", out.Value, ancestor)
+	got, err := TransformOut("erp", out.Value, ancestor)
 	if err != nil {
 		t.Fatalf("TransformOut: %v", err)
 	}
