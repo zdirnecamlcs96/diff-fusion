@@ -23,6 +23,8 @@ var wantExports = []string{
 	"df_idempotency_key_hex",
 	"df_merge_batch",
 	"df_fuse",
+	"df_transform_from_cif",
+	"df_resolve",
 }
 
 // TestKernelExportParity fails the moment the Rust kernel's df_* export

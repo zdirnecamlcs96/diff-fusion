@@ -23,7 +23,9 @@ const EXPECTED_WASM_EXPORTS = [
   "idempotency_key_hex",
   "merge_batch",
   "merge_field",
+  "resolve",
   "three_way_diff",
+  "transform_from_cif",
   "transform_to_cif",
 ] as const;
 
@@ -49,7 +51,9 @@ describe("kernel wasm export parity", () => {
       idempotency_key_hex: kernel.kernelIdempotencyKeyHex,
       merge_batch: kernel.kernelMergeBatch,
       merge_field: kernel.kernelMergeField,
+      resolve: kernel.kernelResolve,
       three_way_diff: kernel.kernelThreeWayDiff,
+      transform_from_cif: kernel.kernelTransformFromCif,
       transform_to_cif: kernel.kernelTransformToCif,
     };
     for (const name of EXPECTED_WASM_EXPORTS) {

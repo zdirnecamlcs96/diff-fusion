@@ -270,6 +270,73 @@ export function kernelTransformToCifRaw(
   return wasm.transform_to_cif(source, schema, formatId);
 }
 
+/**
+ * Wasm target throws on failure (no ok/err envelope on this target); this
+ * is where that converts back to TS's discriminated-union `TransformResult`.
+ */
+export function kernelTransformFromCif(
+  cif: JsonValue,
+  schema: JsonValue,
+  formatId: string,
+): TransformResult {
+  try {
+    const raw = wasm.transform_from_cif(
+      JSON.stringify(cif),
+      JSON.stringify(schema),
+      formatId,
+    );
+    return { ok: true, value: jsonValueSchema.parse(JSON.parse(raw)) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Raw string passthrough for `transform_from_cif`, bypassing the try/catch
+ * envelope conversion `kernelTransformFromCif` does. For conformance tests
+ * that must hand the wasm boundary byte-identical input shared across
+ * runtimes, mirrors `kernelTransformToCifRaw`.
+ */
+export function kernelTransformFromCifRaw(
+  cif: string,
+  schema: string,
+  formatId: string,
+): string {
+  return wasm.transform_from_cif(cif, schema, formatId);
+}
+
+export function kernelResolve(
+  ancestor: JsonValue,
+  changelog: Changelog,
+  policyDoc: PolicyDocument,
+  ctx: MergeContext,
+): FuseResult {
+  return fuseResultSchema.parse(
+    JSON.parse(
+      wasm.resolve(
+        JSON.stringify(ancestor),
+        JSON.stringify({ changes: changelog.changes.map(fieldChangeToWire) }),
+        JSON.stringify(policyDoc),
+        JSON.stringify({ system_a: ctx.system_a, system_b: ctx.system_b }),
+      ),
+    ),
+  );
+}
+
+/**
+ * Raw string passthrough for `resolve`, bypassing the JSON.stringify/parse the
+ * typed wrapper above does. For conformance tests that must hand the wasm
+ * boundary byte-identical input shared across runtimes, mirrors `kernelFuseRaw`.
+ */
+export function kernelResolveRaw(
+  ancestor: string,
+  changelog: string,
+  policyDoc: string,
+  ctx: string,
+): string {
+  return wasm.resolve(ancestor, changelog, policyDoc, ctx);
+}
+
 export function kernelCanonicalJson(doc: JsonValue): string {
   return wasm.canonical_json(JSON.stringify(doc));
 }

@@ -32,9 +32,11 @@ type Kernel struct {
 // API is the Kernel's exported surface, for host apps to mock in tests
 // without instantiating the wazero/WASM runtime.
 type API interface {
-	Close(ctx context.Context) error
-	Fuse(ctx context.Context, ancestor, a, b, policyDoc, mergeCtx []byte) ([]byte, error)
 	TransformToCIF(ctx context.Context, source, schema []byte, formatID string) ([]byte, error)
+	ThreeWayDiff(ctx context.Context, ancestor, a, b []byte) ([]byte, error)
+	Resolve(ctx context.Context, ancestor, changelog, policyDoc, mergeCtx []byte) ([]byte, error)
+	TransformFromCIF(ctx context.Context, cif, schema []byte, formatID string) ([]byte, error)
+	Close(ctx context.Context) error
 }
 
 var _ API = (*Kernel)(nil)
@@ -64,6 +66,7 @@ func New(ctx context.Context) (*Kernel, error) {
 	for _, name := range []string{
 		"df_three_way_diff", "df_merge_field", "df_canonical_json", "df_idempotency_key_hex",
 		"df_compare_json", "df_transform_to_cif", "df_merge_batch", "df_fuse",
+		"df_transform_from_cif", "df_resolve",
 	} {
 		fn := mod.ExportedFunction(name)
 		if fn == nil {
@@ -77,7 +80,9 @@ func New(ctx context.Context) (*Kernel, error) {
 
 func (k *Kernel) Close(ctx context.Context) error { return k.runtime.Close(ctx) }
 
-func (k *Kernel) threeWayDiff(ctx context.Context, ancestor, a, b []byte) ([]byte, error) {
+// ThreeWayDiff detects field-level changes between ancestor and a/b (step
+// 2: detect), returning the changelog Resolve expects.
+func (k *Kernel) ThreeWayDiff(ctx context.Context, ancestor, a, b []byte) ([]byte, error) {
 	return k.call(ctx, "df_three_way_diff", ancestor, a, b)
 }
 
@@ -97,6 +102,13 @@ func (k *Kernel) TransformToCIF(ctx context.Context, source, schema []byte, form
 	return k.call(ctx, "df_transform_to_cif", source, schema, []byte(formatID))
 }
 
+// TransformFromCIF is the reverse of TransformToCIF: it emits only the
+// source paths mapped by schema for formatID, leaving unmapped fields
+// untouched (step 4: emit).
+func (k *Kernel) TransformFromCIF(ctx context.Context, cif, schema []byte, formatID string) ([]byte, error) {
+	return k.call(ctx, "df_transform_from_cif", cif, schema, []byte(formatID))
+}
+
 func (k *Kernel) idempotencyKeyHex(ctx context.Context, canonicalID, operation string, payload []byte) (string, error) {
 	out, err := k.call(ctx, "df_idempotency_key_hex", []byte(canonicalID), []byte(operation), payload)
 	return string(out), err
@@ -106,9 +118,13 @@ func (k *Kernel) mergeBatch(ctx context.Context, changelog, policyDoc, mergeCtx 
 	return k.call(ctx, "df_merge_batch", changelog, policyDoc, mergeCtx)
 }
 
-// Fuse three-way merges ancestor/a/b under policyDoc, returning the merged
-// document and any conflicts.
-func (k *Kernel) Fuse(ctx context.Context, ancestor, a, b, policyDoc, mergeCtx []byte) ([]byte, error) {
+// Resolve takes ThreeWayDiff's changelog and applies policy resolutions
+// onto ancestor (step 3), returning {"value":...,"conflicts":[...]}.
+func (k *Kernel) Resolve(ctx context.Context, ancestor, changelog, policyDoc, mergeCtx []byte) ([]byte, error) {
+	return k.call(ctx, "df_resolve", ancestor, changelog, policyDoc, mergeCtx)
+}
+
+func (k *Kernel) fuse(ctx context.Context, ancestor, a, b, policyDoc, mergeCtx []byte) ([]byte, error) {
 	return k.call(ctx, "df_fuse", ancestor, a, b, policyDoc, mergeCtx)
 }
 

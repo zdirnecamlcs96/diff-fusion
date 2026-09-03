@@ -9,11 +9,15 @@ run by [wazero](https://wazero.io) (pure Go, zero cgo).
 
     k, err := kernel.New(ctx)
     defer k.Close(ctx)
-    out, err := k.Fuse(ctx, ancestor, a, b, policyDoc, mergeCtx) // JSON bytes in/out -> {"value":...,"conflicts":[...]}
+    cif, err := k.TransformToCIF(ctx, source, schema, formatID)      // step 1: ingest -> CIF
+    changelog, err := k.ThreeWayDiff(ctx, ancestor, a, b)            // step 2: detect changes
+    merged, err := k.Resolve(ctx, ancestor, changelog, policyDoc, mergeCtx) // step 3: resolve -> {"value":...,"conflicts":[...]}
+    out, err := k.TransformFromCIF(ctx, mergedValue, schema, formatID) // step 4: emit CIF -> source ("value" from step 3)
 
-Three methods: `Fuse`, `TransformToCIF`, `Close`. Wire contract (wire shapes,
-policy config, merge outcome) is pinned by `../../spec/schema/`; conformance
-by `../../spec/vectors/` — the Rust generator is the sole producer.
+The four-step pipeline is `TransformToCIF` -> `ThreeWayDiff` -> `Resolve` ->
+`TransformFromCIF`, plus `Close`. Wire contract (wire shapes, policy config,
+merge outcome) is pinned by `../../spec/schema/`; conformance by
+`../../spec/vectors/` — the Rust generator is the sole producer.
 
 A `Kernel` is not goroutine-safe; create one per goroutine or pool.
 

@@ -13,7 +13,9 @@ import {
   kernelFuseRaw,
   kernelMergeBatchRaw,
   kernelMergeFieldRaw,
+  kernelResolveRaw,
   kernelThreeWayDiffRaw,
+  kernelTransformFromCifRaw,
   kernelTransformToCifRaw,
   wireChangelogSchema,
   wireFieldChangeSchema,
@@ -77,6 +79,25 @@ type TransformToCifVector = {
   isErr: boolean;
 };
 
+type TransformFromCifVector = {
+  name: string;
+  cif: string;
+  schema: string;
+  formatId: string;
+  expected: string;
+  isErr: boolean;
+};
+
+type ResolveVector = {
+  name: string;
+  ancestor: string;
+  changelog: string;
+  policyDoc: string;
+  ctx: string;
+  expected: string;
+  isErr: boolean;
+};
+
 type KernelVectors = {
   threeWayDiff: ThreeWayDiffVector[];
   mergeField: MergeFieldVector[];
@@ -84,6 +105,8 @@ type KernelVectors = {
   fuse: FuseVector[];
   compareJson: CompareJsonVector[];
   transformToCif: TransformToCifVector[];
+  transformFromCif: TransformFromCifVector[];
+  resolve: ResolveVector[];
 };
 
 const fixtureUrl = new URL(
@@ -100,16 +123,20 @@ const EXPECTED_MERGE_BATCH = 5;
 const EXPECTED_FUSE = 7;
 const EXPECTED_COMPARE_JSON = 8;
 const EXPECTED_TRANSFORM_TO_CIF = 13;
+const EXPECTED_TRANSFORM_FROM_CIF = 10;
+const EXPECTED_RESOLVE = 7;
 if (
   vectors.threeWayDiff.length !== EXPECTED_THREE_WAY_DIFF ||
   vectors.mergeField.length !== EXPECTED_MERGE_FIELD ||
   vectors.mergeBatch.length !== EXPECTED_MERGE_BATCH ||
   vectors.fuse.length !== EXPECTED_FUSE ||
   vectors.compareJson.length !== EXPECTED_COMPARE_JSON ||
-  vectors.transformToCif.length !== EXPECTED_TRANSFORM_TO_CIF
+  vectors.transformToCif.length !== EXPECTED_TRANSFORM_TO_CIF ||
+  vectors.transformFromCif.length !== EXPECTED_TRANSFORM_FROM_CIF ||
+  vectors.resolve.length !== EXPECTED_RESOLVE
 ) {
   throw new Error(
-    `expected ${EXPECTED_THREE_WAY_DIFF} threeWayDiff + ${EXPECTED_MERGE_FIELD} mergeField + ${EXPECTED_MERGE_BATCH} mergeBatch + ${EXPECTED_FUSE} fuse + ${EXPECTED_COMPARE_JSON} compareJson + ${EXPECTED_TRANSFORM_TO_CIF} transformToCif vectors, got ${vectors.threeWayDiff.length} + ${vectors.mergeField.length} + ${vectors.mergeBatch.length} + ${vectors.fuse.length} + ${vectors.compareJson.length} + ${vectors.transformToCif.length}`,
+    `expected ${EXPECTED_THREE_WAY_DIFF} threeWayDiff + ${EXPECTED_MERGE_FIELD} mergeField + ${EXPECTED_MERGE_BATCH} mergeBatch + ${EXPECTED_FUSE} fuse + ${EXPECTED_COMPARE_JSON} compareJson + ${EXPECTED_TRANSFORM_TO_CIF} transformToCif + ${EXPECTED_TRANSFORM_FROM_CIF} transformFromCif + ${EXPECTED_RESOLVE} resolve vectors, got ${vectors.threeWayDiff.length} + ${vectors.mergeField.length} + ${vectors.mergeBatch.length} + ${vectors.fuse.length} + ${vectors.compareJson.length} + ${vectors.transformToCif.length} + ${vectors.transformFromCif.length} + ${vectors.resolve.length}`,
   );
 }
 
@@ -210,6 +237,40 @@ describe("kernel vector conformance", () => {
           expect(kernelTransformToCifRaw(v.source, v.schema, v.formatId)).toBe(
             v.expected,
           );
+        }
+      });
+    }
+  });
+
+  describe("transform_from_cif", () => {
+    for (const v of vectors.transformFromCif) {
+      it(v.name, () => {
+        if (v.isErr) {
+          expect(
+            messageOf(() => kernelTransformFromCifRaw(v.cif, v.schema, v.formatId)),
+          ).toBe(v.expected);
+        } else {
+          expect(kernelTransformFromCifRaw(v.cif, v.schema, v.formatId)).toBe(
+            v.expected,
+          );
+        }
+      });
+    }
+  });
+
+  describe("resolve", () => {
+    for (const v of vectors.resolve) {
+      it(v.name, () => {
+        if (v.isErr) {
+          expect(
+            messageOf(() =>
+              kernelResolveRaw(v.ancestor, v.changelog, v.policyDoc, v.ctx),
+            ),
+          ).toBe(v.expected);
+        } else {
+          expect(
+            kernelResolveRaw(v.ancestor, v.changelog, v.policyDoc, v.ctx),
+          ).toBe(v.expected);
         }
       });
     }

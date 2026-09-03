@@ -64,7 +64,7 @@ func TestGoldenIdempotencyVectors(t *testing.T) {
 
 func TestDiffNullClearIsPresentNullAndUntouchedSideOmitted(t *testing.T) {
 	k, ctx := newKernel(t)
-	out, err := k.threeWayDiff(ctx,
+	out, err := k.ThreeWayDiff(ctx,
 		[]byte(`{"status":"draft"}`),
 		[]byte(`{"status":null}`),
 		[]byte(`{"status":"draft"}`))
@@ -114,7 +114,7 @@ func TestInconsistentSourceIsError(t *testing.T) {
 
 func TestBadJSONIsError(t *testing.T) {
 	k, ctx := newKernel(t)
-	if _, err := k.threeWayDiff(ctx, []byte(`{`), []byte(`{}`), []byte(`{}`)); err == nil {
+	if _, err := k.ThreeWayDiff(ctx, []byte(`{`), []byte(`{}`), []byte(`{}`)); err == nil {
 		t.Error("want error for invalid JSON")
 	}
 }
