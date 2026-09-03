@@ -10,6 +10,8 @@ import (
 	"log"
 	"time"
 
+	decimal "github.com/zdirnecamlcs96/go-decimal"
+
 	"github.com/zdirnecamlcs96/diff-fusion/sdk/golang/kernel"
 )
 
@@ -33,17 +35,8 @@ type HubspotContact struct {
 	} `json:"tags" cif:"tags"`
 	// no cif tag: local-only, not part of the CIF schema at all.
 	HsScore int `json:"hs_score"`
-	// json.Marshaler type: assert wire shape with a type override
-	Balance money `json:"balance" cif:"balance,number"`
-}
-
-// money is a tiny decimal-money stand-in (cents) with a custom MarshalJSON
-// that emits a JSON number — reflection can't see that shape on its own, so
-// the Balance field above needs a cif tag type override.
-type money struct{ cents int64 }
-
-func (m money) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%d.%02d", m.cents/100, m.cents%100)), nil
+	// json.Marshaler type (go-decimal marshals as a JSON number): assert wire shape with a type override
+	Balance decimal.GoDecimal `json:"balance" cif:"balance,number"`
 }
 
 // badContact triggers SchemaFromStruct's time.Time rejection.

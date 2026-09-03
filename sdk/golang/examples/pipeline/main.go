@@ -6,14 +6,17 @@ package main
 import (
 	"fmt"
 
+	decimal "github.com/zdirnecamlcs96/go-decimal"
+
 	"github.com/zdirnecamlcs96/diff-fusion/sdk/golang/examples/jobs"
 )
 
 // HubspotContact is Hubspot's own record shape: nested "properties", lower-case keys.
 type HubspotContact struct {
 	Properties struct {
-		Email   string `json:"email" cif:"email,required"`
-		Phone   string `json:"phone" cif:"phone"`
+		Email   string            `json:"email" cif:"email,required"`
+		Phone   string            `json:"phone" cif:"phone"`
+		Balance decimal.GoDecimal `json:"balance" cif:"balance,number"`
 		Address struct {
 			City string `json:"city" cif:"city"`
 			Zip  string `json:"zip"  cif:"zip"`
@@ -24,8 +27,9 @@ type HubspotContact struct {
 
 // SalesforceContact is Salesforce's own record shape: flat, PascalCase keys.
 type SalesforceContact struct {
-	Email          string `json:"Email" cif:"email,required"`
-	Phone          string `json:"Phone" cif:"phone"`
+	Email          string            `json:"Email" cif:"email,required"`
+	Phone          string            `json:"Phone" cif:"phone"`
+	AccountBalance decimal.GoDecimal `json:"AccountBalance" cif:"balance,number"`
 	MailingAddress struct {
 		City       string `json:"City" cif:"city"`
 		PostalCode string `json:"PostalCode" cif:"zip"`
@@ -38,6 +42,7 @@ func main() {
 	var lastSynced HubspotContact
 	lastSynced.Properties.Email = "jane@example.com"
 	lastSynced.Properties.Phone = "555-0100"
+	lastSynced.Properties.Balance = decimal.New(1234, 2)
 	lastSynced.Properties.Address.City = "Springfield"
 	lastSynced.Properties.Address.Zip = "00000"
 
@@ -51,6 +56,7 @@ func main() {
 	var salesforceNow SalesforceContact
 	salesforceNow.Email = lastSynced.Properties.Email
 	salesforceNow.Phone = "555-0288"
+	salesforceNow.AccountBalance = decimal.New(1234, 2)
 	salesforceNow.MailingAddress.City = "Shelbyville"
 	salesforceNow.MailingAddress.PostalCode = lastSynced.Properties.Address.Zip
 	salesforceNow.OwnerId = "005xx0000012Abc"
