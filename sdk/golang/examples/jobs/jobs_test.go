@@ -66,15 +66,14 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-// TestResolveOutputKeepsRawValue pins why CIF has UnmarshalJSON: Resolve
-// decodes the kernel's {"value":...} into ResolveOutput.Value, and without
-// the method encoding/json treats CIF as []byte and rejects the object.
+// TestResolveOutputKeepsRawValue pins that embedding json.RawMessage promotes
+// UnmarshalJSON: Resolve decodes the kernel's {"value":...} into a CIF unchanged.
 func TestResolveOutputKeepsRawValue(t *testing.T) {
 	var out ResolveOutput
 	if err := json.Unmarshal([]byte(`{"value":{"qty":5,"sku":"A1"},"conflicts":[]}`), &out); err != nil {
 		t.Fatal(err)
 	}
-	if string(out.Value) != `{"qty":5,"sku":"A1"}` || string(out.Conflicts) != `[]` {
-		t.Fatalf("value %s conflicts %s", out.Value, out.Conflicts)
+	if string(out.Value.RawMessage) != `{"qty":5,"sku":"A1"}` || string(out.Conflicts) != `[]` {
+		t.Fatalf("value %s conflicts %s", out.Value.RawMessage, out.Conflicts)
 	}
 }

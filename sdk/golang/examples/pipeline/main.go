@@ -32,11 +32,11 @@ func main() {
 	must(err)
 	theirsCIF, err := jobs.TransformIn[Doc]("erp", theirs)
 	must(err)
-	fmt.Printf("1. CIF (mine): %s\n", string(mineCIF))
+	fmt.Printf("1. CIF (mine): %s\n", string(mineCIF.RawMessage))
 
 	changelog, err := jobs.Detect(ancestorCIF, mineCIF, theirsCIF)
 	must(err)
-	fmt.Printf("2. changelog: %s\n", string(changelog))
+	fmt.Printf("2. changelog: %s\n", string(changelog.RawMessage))
 
 	policy := []byte(`{"fields":{"qty":{"kind":"owned_by","system":"erp"},"sku":{"kind":"owned_by","system":"crm"}}}`)
 	out, err := jobs.Resolve(jobs.ResolveInput{
@@ -47,7 +47,7 @@ func main() {
 		SystemB:   "crm",
 	})
 	must(err)
-	fmt.Printf("3. merged: %s\n", string(out.Value))
+	fmt.Printf("3. merged: %s\n", string(out.Value.RawMessage))
 	fmt.Printf("   conflicts: %s\n", out.Conflicts)
 
 	entity, err := jobs.TransformOut[Doc]("erp", out.Value, ancestor)

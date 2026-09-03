@@ -7,7 +7,7 @@
 //  3. Resolve       Changelog + policy -> merged CIF + conflicts    (kernel.Resolve)
 //  4. TransformOut  CIF -> entity                                   (kernel.TransformFromCIF)
 //
-// CIF and Changelog are distinct types, so a step given the wrong step's output fails to compile.
+// CIF and Changelog are distinct types, so a step handed the wrong step's output fails to compile.
 package jobs
 
 import (
@@ -30,53 +30,48 @@ var k = sync.OnceValue(func() *kernel.Kernel {
 })
 var mu sync.Mutex
 
-// CIF is a Common Intermediate Format document: output of TransformIn, input of Detect/Resolve/TransformOut.
-type CIF json.RawMessage
+// CIF is a Common Intermediate Format document. Embedding json.RawMessage promotes
+// its MarshalJSON/UnmarshalJSON, so CIF passes through encoding/json unchanged while
+// staying a distinct type from Changelog: a step handed the wrong step's output fails to compile.
+type CIF struct{ json.RawMessage }
 
 // Changelog is Detect's output and Resolve's input ({"changes":[...]}).
-type Changelog json.RawMessage
-
-// UnmarshalJSON keeps the raw bytes: a defined type does not inherit json.RawMessage's methods, and
-// Resolve decodes {"value":...} into a CIF.
-func (c *CIF) UnmarshalJSON(b []byte) error {
-	*c = append((*c)[:0], b...)
-	return nil
-}
+type Changelog struct{ json.RawMessage }
 
 // TransformIn: step 1. entity -> CIF. D = cif-tagged doc struct (schema via kernel.SchemaFromStruct(new(D), format)), E = entity type.
 func TransformIn[D, E any](format string, entity E) (CIF, error) {
 	schema, err := kernel.SchemaFromStruct(new(D), format)
 	if err != nil {
-		return nil, err
+		return CIF{}, err
 	}
 	src, err := json.Marshal(entity)
 	if err != nil {
-		return nil, err
+		return CIF{}, err
 	}
 	mu.Lock()
 	defer mu.Unlock()
 	out, err := k().TransformToCIF(context.Background(), src, schema, format)
 	if err != nil {
-		return nil, err
+		return CIF{}, err
 	}
-	return CIF(out), nil
+	return CIF{RawMessage: out}, nil
 }
 
 // Detect: step 2. Three CIF documents -> Changelog, via kernel.ThreeWayDiff.
 func Detect(ancestor, a, b CIF) (Changelog, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	out, err := k().ThreeWayDiff(context.Background(), ancestor, a, b)
+	out, err := k().ThreeWayDiff(context.Background(), ancestor.RawMessage, a.RawMessage, b.RawMessage)
 	if err != nil {
-		return nil, err
+		return Changelog{}, err
 	}
-	return Changelog(out), nil
+	return Changelog{RawMessage: out}, nil
 }
 
 type ResolveInput struct {
 	Ancestor         CIF
 	Changelog        Changelog
-	Policy           []byte // {"fields":{...}}
+	Policy           json.RawMessage // {"fields":{...}}
 	SystemA, SystemB string
 }
 
@@ -95,7 +90,7 @@ func Resolve(in ResolveInput) (ResolveOutput, error) {
 		return ResolveOutput{}, err
 	}
 	mu.Lock()
-	out, err := k().Resolve(context.Background(), in.Ancestor, in.Changelog, in.Policy, mergeCtx)
+	out, err := k().Resolve(context.Background(), in.Ancestor.RawMessage, in.Changelog.RawMessage, in.Policy, mergeCtx)
 	mu.Unlock()
 	if err != nil {
 		return ResolveOutput{}, err
@@ -115,7 +110,7 @@ func TransformOut[D, E any](format string, cif CIF, into E) (E, error) {
 		return into, err
 	}
 	mu.Lock()
-	out, err := k().TransformFromCIF(context.Background(), cif, schema, format)
+	out, err := k().TransformFromCIF(context.Background(), cif.RawMessage, schema, format)
 	mu.Unlock()
 	if err != nil {
 		return into, err

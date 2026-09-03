@@ -11,7 +11,7 @@ Four pure jobs, one per kernel step:
 3. `Resolve(in ResolveInput) (ResolveOutput, error)` — changelog + policy -> merged CIF + conflicts (`kernel.Resolve`)
 4. `TransformOut[D, E any](format string, cif CIF, into E) (E, error)` — CIF -> entity (`kernel.TransformFromCIF`)
 
-CIF and Changelog are distinct types, so steps cannot be wired out of order.
+CIF and Changelog embed json.RawMessage: distinct types, stdlib JSON behaviour.
 
 ## Run
 
