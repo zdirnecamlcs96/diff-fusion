@@ -23,20 +23,21 @@ func TestRoundTrip(t *testing.T) {
 	theirs := ancestor
 	theirs.StockCode = "A1-R"
 
-	ancestorCIF, err := TransformIn[Doc]("erp", ancestor)
+	ancestorOut, err := TransformIn[Doc](TransformInput[Doc]{Format: "erp", Doc: ancestor})
 	if err != nil {
 		t.Fatalf("TransformIn(ancestor): %v", err)
 	}
-	mineCIF, err := TransformIn[Doc]("erp", mine)
+	mineOut, err := TransformIn[Doc](TransformInput[Doc]{Format: "erp", Doc: mine})
 	if err != nil {
 		t.Fatalf("TransformIn(mine): %v", err)
 	}
-	theirsCIF, err := TransformIn[Doc]("erp", theirs)
+	theirsOut, err := TransformIn[Doc](TransformInput[Doc]{Format: "erp", Doc: theirs})
 	if err != nil {
 		t.Fatalf("TransformIn(theirs): %v", err)
 	}
+	ancestorCIF := ancestorOut.Doc
 
-	changelog, err := Detect(ancestorCIF, mineCIF, theirsCIF)
+	changelog, err := Detect(ancestorOut.Doc, mineOut.Doc, theirsOut.Doc)
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
@@ -56,10 +57,12 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("want no conflicts, got %s", out.Conflicts)
 	}
 
-	patch, err := TransformOut[Doc]("erp", out.Value)
+	// out.Value is a json.RawMessage; TransformOut takes it directly, no conversion.
+	patchOut, err := TransformOut[Doc](TransformInput[Doc]{Format: "erp", Doc: out.Value})
 	if err != nil {
 		t.Fatalf("TransformOut: %v", err)
 	}
+	patch := patchOut.Doc
 
 	got := ancestor
 	if err := json.Unmarshal(patch, &got); err != nil {
