@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"encoding/json"
 	"testing"
 )
 
@@ -63,22 +62,5 @@ func TestRoundTrip(t *testing.T) {
 	want := Entity{StockCode: "A1-R", Quantity: 5, Note: "local"}
 	if got != want {
 		t.Fatalf("got %+v want %+v", got, want)
-	}
-}
-
-// TestCIFPassthrough proves CIF's MarshalJSON/UnmarshalJSON make it pass through
-// as raw JSON rather than being base64-encoded like a plain []byte would be.
-func TestCIFPassthrough(t *testing.T) {
-	type holder struct {
-		Doc CIF `json:"doc"`
-	}
-	h := holder{Doc: CIF(`{"sku":"A1","qty":3}`)}
-	b, err := json.Marshal(h)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	want := `{"doc":{"sku":"A1","qty":3}}`
-	if string(b) != want {
-		t.Fatalf("got %s want %s", b, want)
 	}
 }

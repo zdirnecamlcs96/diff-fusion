@@ -36,29 +36,9 @@ type CIF json.RawMessage
 // Changelog is Detect's output and Resolve's input ({"changes":[...]}).
 type Changelog json.RawMessage
 
-// Both newtypes get JSON passthrough (a defined type does not inherit json.RawMessage's methods;
-// without these json.Marshal would base64 them):
-
-func (c CIF) MarshalJSON() ([]byte, error) {
-	if c == nil {
-		return []byte("null"), nil
-	}
-	return c, nil
-}
-
+// UnmarshalJSON keeps the raw bytes: a defined type does not inherit json.RawMessage's methods, and
+// Resolve decodes {"value":...} into a CIF.
 func (c *CIF) UnmarshalJSON(b []byte) error {
-	*c = append((*c)[:0], b...)
-	return nil
-}
-
-func (c Changelog) MarshalJSON() ([]byte, error) {
-	if c == nil {
-		return []byte("null"), nil
-	}
-	return c, nil
-}
-
-func (c *Changelog) UnmarshalJSON(b []byte) error {
 	*c = append((*c)[:0], b...)
 	return nil
 }
