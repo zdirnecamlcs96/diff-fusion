@@ -26,33 +26,33 @@ func main() {
 	theirs := ancestor
 	theirs.StockCode = "A1-R"
 
-	ancestorOut, err := jobs.TransformIn[Doc](jobs.TransformInput[Doc]{Format: "erp", Doc: ancestor})
+	ancestorCIF, err := jobs.TransformIn[Doc]("erp", ancestor)
 	must(err)
-	mineOut, err := jobs.TransformIn[Doc](jobs.TransformInput[Doc]{Format: "erp", Doc: mine})
+	mineCIF, err := jobs.TransformIn[Doc]("erp", mine)
 	must(err)
-	theirsOut, err := jobs.TransformIn[Doc](jobs.TransformInput[Doc]{Format: "erp", Doc: theirs})
+	theirsCIF, err := jobs.TransformIn[Doc]("erp", theirs)
 	must(err)
-	fmt.Printf("1. CIF (mine): %s\n", mineOut.Doc)
+	fmt.Printf("1. CIF (mine): %s\n", string(mineCIF))
 
-	changelog, err := jobs.Detect(ancestorOut.Doc, mineOut.Doc, theirsOut.Doc)
+	changelog, err := jobs.Detect(ancestorCIF, mineCIF, theirsCIF)
 	must(err)
-	fmt.Printf("2. changelog: %s\n", changelog)
+	fmt.Printf("2. changelog: %s\n", string(changelog))
 
 	policy := []byte(`{"fields":{"qty":{"kind":"owned_by","system":"erp"},"sku":{"kind":"owned_by","system":"crm"}}}`)
 	out, err := jobs.Resolve(jobs.ResolveInput{
-		Ancestor:  ancestorOut.Doc,
+		Ancestor:  ancestorCIF,
 		Changelog: changelog,
 		Policy:    policy,
 		SystemA:   "erp",
 		SystemB:   "crm",
 	})
 	must(err)
-	fmt.Printf("3. merged: %s\n", out.Value)
+	fmt.Printf("3. merged: %s\n", string(out.Value))
 	fmt.Printf("   conflicts: %s\n", out.Conflicts)
 
-	patchOut, err := jobs.TransformOut[Doc](jobs.TransformInput[Doc]{Format: "erp", Doc: out.Value})
+	entity, err := jobs.TransformOut[Doc]("erp", out.Value, ancestor)
 	must(err)
-	fmt.Printf("4. patch: %s\n", patchOut.Doc)
+	fmt.Printf("4. entity: %+v\n", entity)
 }
 
 func must(err error) {

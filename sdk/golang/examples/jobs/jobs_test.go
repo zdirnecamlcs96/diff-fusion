@@ -23,21 +23,20 @@ func TestRoundTrip(t *testing.T) {
 	theirs := ancestor
 	theirs.StockCode = "A1-R"
 
-	ancestorOut, err := TransformIn[Doc](TransformInput[Doc]{Format: "erp", Doc: ancestor})
+	ancestorCIF, err := TransformIn[Doc]("erp", ancestor)
 	if err != nil {
 		t.Fatalf("TransformIn(ancestor): %v", err)
 	}
-	mineOut, err := TransformIn[Doc](TransformInput[Doc]{Format: "erp", Doc: mine})
+	mineCIF, err := TransformIn[Doc]("erp", mine)
 	if err != nil {
 		t.Fatalf("TransformIn(mine): %v", err)
 	}
-	theirsOut, err := TransformIn[Doc](TransformInput[Doc]{Format: "erp", Doc: theirs})
+	theirsCIF, err := TransformIn[Doc]("erp", theirs)
 	if err != nil {
 		t.Fatalf("TransformIn(theirs): %v", err)
 	}
-	ancestorCIF := ancestorOut.Doc
 
-	changelog, err := Detect(ancestorOut.Doc, mineOut.Doc, theirsOut.Doc)
+	changelog, err := Detect(ancestorCIF, mineCIF, theirsCIF)
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
@@ -57,19 +56,29 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("want no conflicts, got %s", out.Conflicts)
 	}
 
-	// out.Value is a json.RawMessage; TransformOut takes it directly, no conversion.
-	patchOut, err := TransformOut[Doc](TransformInput[Doc]{Format: "erp", Doc: out.Value})
+	got, err := TransformOut[Doc]("erp", out.Value, ancestor)
 	if err != nil {
 		t.Fatalf("TransformOut: %v", err)
 	}
-	patch := patchOut.Doc
-
-	got := ancestor
-	if err := json.Unmarshal(patch, &got); err != nil {
-		t.Fatalf("apply patch %s: %v", patch, err)
-	}
 	want := Entity{StockCode: "A1-R", Quantity: 5, Note: "local"}
 	if got != want {
-		t.Fatalf("got %+v (patch=%s) want %+v", got, patch, want)
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+}
+
+// TestCIFPassthrough proves CIF's MarshalJSON/UnmarshalJSON make it pass through
+// as raw JSON rather than being base64-encoded like a plain []byte would be.
+func TestCIFPassthrough(t *testing.T) {
+	type holder struct {
+		Doc CIF `json:"doc"`
+	}
+	h := holder{Doc: CIF(`{"sku":"A1","qty":3}`)}
+	b, err := json.Marshal(h)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	want := `{"doc":{"sku":"A1","qty":3}}`
+	if string(b) != want {
+		t.Fatalf("got %s want %s", b, want)
 	}
 }

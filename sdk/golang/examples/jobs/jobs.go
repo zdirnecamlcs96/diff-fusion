@@ -2,10 +2,12 @@
 // pipeline as four pure jobs, one per kernel step. Pure = deterministic, no
 // I/O, no hidden state beyond the kernel instance, no time.Now.
 //
-//  1. TransformIn   entity -> CIF bytes                            (kernel.TransformToCIF)
-//  2. Detect        ancestor/a/b CIF -> changelog                  (kernel.ThreeWayDiff)
-//  3. Resolve       changelog + policy -> merged CIF + conflicts   (kernel.Resolve)
-//  4. TransformOut  CIF -> entity JSON patch                       (kernel.TransformFromCIF)
+//  1. TransformIn   entity -> CIF                                   (kernel.TransformToCIF)
+//  2. Detect        ancestor/a/b CIF -> Changelog                   (kernel.ThreeWayDiff)
+//  3. Resolve       Changelog + policy -> merged CIF + conflicts    (kernel.Resolve)
+//  4. TransformOut  CIF -> entity                                   (kernel.TransformFromCIF)
+//
+// CIF and Changelog are distinct types, so a step given the wrong step's output fails to compile.
 package jobs
 
 import (
@@ -28,68 +30,78 @@ var k = sync.OnceValue(func() *kernel.Kernel {
 })
 var mu sync.Mutex
 
-// TransformInput is the argument of TransformIn and TransformOut. D is the
-// cif-tagged doc struct the schema is derived from (SchemaFromStruct). Doc is
-// the document to convert: any JSON-marshalable value for TransformIn (the
-// entity); the CIF bytes ([]byte or json.RawMessage) for TransformOut.
-type TransformInput[D any] struct {
-	Format string
-	Doc    any
-}
+// CIF is a Common Intermediate Format document: output of TransformIn, input of Detect/Resolve/TransformOut.
+type CIF json.RawMessage
 
-// TransformOutput: CIF bytes from TransformIn, entity JSON patch from TransformOut.
-type TransformOutput struct {
-	Doc json.RawMessage
-}
+// Changelog is Detect's output and Resolve's input ({"changes":[...]}).
+type Changelog json.RawMessage
 
-// docBytes marshals doc to JSON bytes. []byte and json.RawMessage pass
-// through untouched (json.Marshal would base64-encode a []byte).
-func docBytes(doc any) ([]byte, error) {
-	switch v := doc.(type) {
-	case []byte:
-		return v, nil
-	case json.RawMessage:
-		return v, nil
-	default:
-		return json.Marshal(doc)
+// Both newtypes get JSON passthrough (a defined type does not inherit json.RawMessage's methods;
+// without these json.Marshal would base64 them):
+
+func (c CIF) MarshalJSON() ([]byte, error) {
+	if c == nil {
+		return []byte("null"), nil
 	}
+	return c, nil
 }
 
-// TransformIn: entity -> CIF bytes. D is the cif-tagged doc struct; schema derived from its tags.
-func TransformIn[D any](in TransformInput[D]) (TransformOutput, error) {
-	schema, err := kernel.SchemaFromStruct(new(D), in.Format)
-	if err != nil {
-		return TransformOutput{}, err
+func (c *CIF) UnmarshalJSON(b []byte) error {
+	*c = append((*c)[:0], b...)
+	return nil
+}
+
+func (c Changelog) MarshalJSON() ([]byte, error) {
+	if c == nil {
+		return []byte("null"), nil
 	}
-	src, err := docBytes(in.Doc)
+	return c, nil
+}
+
+func (c *Changelog) UnmarshalJSON(b []byte) error {
+	*c = append((*c)[:0], b...)
+	return nil
+}
+
+// TransformIn: step 1. entity -> CIF. D = cif-tagged doc struct (schema via kernel.SchemaFromStruct(new(D), format)), E = entity type.
+func TransformIn[D, E any](format string, entity E) (CIF, error) {
+	schema, err := kernel.SchemaFromStruct(new(D), format)
 	if err != nil {
-		return TransformOutput{}, err
+		return nil, err
+	}
+	src, err := json.Marshal(entity)
+	if err != nil {
+		return nil, err
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	out, err := k().TransformToCIF(context.Background(), src, schema, in.Format)
+	out, err := k().TransformToCIF(context.Background(), src, schema, format)
 	if err != nil {
-		return TransformOutput{}, err
+		return nil, err
 	}
-	return TransformOutput{Doc: out}, nil
+	return CIF(out), nil
 }
 
-// Detect: step 2. Three CIF documents -> changelog bytes ({"changes":[...]}), via kernel.ThreeWayDiff.
-func Detect(ancestor, a, b []byte) ([]byte, error) {
+// Detect: step 2. Three CIF documents -> Changelog, via kernel.ThreeWayDiff.
+func Detect(ancestor, a, b CIF) (Changelog, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	return k().ThreeWayDiff(context.Background(), ancestor, a, b)
+	out, err := k().ThreeWayDiff(context.Background(), ancestor, a, b)
+	if err != nil {
+		return nil, err
+	}
+	return Changelog(out), nil
 }
 
 type ResolveInput struct {
-	Ancestor         []byte // CIF
-	Changelog        []byte // from Detect
+	Ancestor         CIF
+	Changelog        Changelog
 	Policy           []byte // {"fields":{...}}
 	SystemA, SystemB string
 }
 
 type ResolveOutput struct {
-	Value     json.RawMessage `json:"value"`
+	Value     CIF             `json:"value"`
 	Conflicts json.RawMessage `json:"conflicts"`
 }
 
@@ -115,22 +127,21 @@ func Resolve(in ResolveInput) (ResolveOutput, error) {
 	return res, nil
 }
 
-// TransformOut: CIF -> entity JSON patch holding only mapped source paths.
-// Apply with json.Unmarshal(patch, &existing): unmapped fields stay untouched.
-func TransformOut[D any](in TransformInput[D]) (TransformOutput, error) {
-	schema, err := kernel.SchemaFromStruct(new(D), in.Format)
+// TransformOut: step 4. CIF -> entity. Applies the mapped source paths onto `into` and returns it;
+// unmapped fields on `into` are untouched (update-not-replace). Via kernel.TransformFromCIF then json.Unmarshal.
+func TransformOut[D, E any](format string, cif CIF, into E) (E, error) {
+	schema, err := kernel.SchemaFromStruct(new(D), format)
 	if err != nil {
-		return TransformOutput{}, err
-	}
-	cif, err := docBytes(in.Doc)
-	if err != nil {
-		return TransformOutput{}, err
+		return into, err
 	}
 	mu.Lock()
-	defer mu.Unlock()
-	out, err := k().TransformFromCIF(context.Background(), cif, schema, in.Format)
+	out, err := k().TransformFromCIF(context.Background(), cif, schema, format)
+	mu.Unlock()
 	if err != nil {
-		return TransformOutput{}, err
+		return into, err
 	}
-	return TransformOutput{Doc: out}, nil
+	if err := json.Unmarshal(out, &into); err != nil {
+		return into, err
+	}
+	return into, nil
 }
