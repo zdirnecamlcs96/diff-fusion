@@ -20,7 +20,8 @@ types, stdlib JSON behaviour.
 Focused on `kernel.SchemaFromStruct`: derives a CIF schema from a native
 `HubspotContact` struct exercising every derivation rule (required,
 optional, `json:"-"`, no-json-tag, transparent nested struct, cif-tagged
-nested struct, slice of struct, untagged local-only field), feeds it to
+nested struct, slice of struct, untagged local-only field, a
+`json.Marshaler` field asserted with a cif tag type override), feeds it to
 `TransformToCIF`, and shows the `time.Time` rejection error.
 
 ## Run

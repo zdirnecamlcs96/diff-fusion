@@ -2,6 +2,8 @@ package kernel
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -410,6 +412,117 @@ func TestSchemaFromStructRootEmptySchema(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no cif-tagged fields") {
 		t.Fatalf("want error about no cif-tagged fields, got: %v", err)
+	}
+}
+
+// money implements json.Marshaler as a decimal-money stand-in (cents,
+// marshaled as a JSON number), for the type-override tests below.
+type money struct{ cents int64 }
+
+func (m money) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("%d.%02d", m.cents/100, m.cents%100)), nil
+}
+
+func TestSchemaFromStructTypeOverrideMarshaler(t *testing.T) {
+	type Doc struct {
+		Amount money `json:"amount" cif:"amount,number"`
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"amount":{"type":"number"}},"transformations":{"f":{"amount":{"source_path":"amount","type":"number"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+
+	type BadDoc struct {
+		Amount money `json:"amount" cif:"amount"`
+	}
+	_, err = SchemaFromStruct(BadDoc{}, "f")
+	if !errors.Is(err, errUnsupportedMarshaler) {
+		t.Fatalf("want errUnsupportedMarshaler without override, got: %v", err)
+	}
+}
+
+func TestSchemaFromStructTypeOverrideTime(t *testing.T) {
+	type Doc struct {
+		CreatedAt time.Time `json:"created_at" cif:"created_at,string"`
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"created_at":{"type":"string"}},"transformations":{"f":{"created_at":{"source_path":"created_at","type":"string"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+
+	type BadDoc struct {
+		CreatedAt time.Time `json:"created_at" cif:"created_at"`
+	}
+	_, err = SchemaFromStruct(BadDoc{}, "f")
+	if !errors.Is(err, errUnsupportedTime) {
+		t.Fatalf("want errUnsupportedTime without override, got: %v", err)
+	}
+}
+
+func TestSchemaFromStructTypeOverrideRequired(t *testing.T) {
+	type Doc struct {
+		Amount money `json:"amount" cif:"amount,required,number"`
+	}
+	got, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	want := `{"cif_schema":{"amount":{"type":"number","required":true}},"transformations":{"f":{"amount":{"source_path":"amount","type":"number"}}}}`
+	assertJSONEqual(t, got, []byte(want))
+}
+
+func TestSchemaFromStructTypeOverrideInvalid(t *testing.T) {
+	type TwoOverrides struct {
+		A string `cif:"a,string,number"`
+	}
+	_, err := SchemaFromStruct(TwoOverrides{}, "f")
+	if err == nil {
+		t.Fatal("want error for two type overrides")
+	}
+	if !strings.Contains(err.Error(), "only one type override allowed") {
+		t.Fatalf("want error about only one type override allowed, got: %v", err)
+	}
+
+	type BadOption struct {
+		A string `cif:"a,integer"`
+	}
+	_, err = SchemaFromStruct(BadOption{}, "f")
+	if err == nil {
+		t.Fatal("want error for invalid cif tag option")
+	}
+	if !strings.Contains(err.Error(), "invalid cif tag option") {
+		t.Fatalf("want error about invalid cif tag option, got: %v", err)
+	}
+}
+
+// TestSchemaFromStructTypeOverrideTransformToCIF proves a type-overridden
+// json.Marshaler field survives a real TransformToCIF call: the derived
+// schema types it as "number", the kernel reads the marshaled JSON number
+// straight off source_path with no kind inspection.
+func TestSchemaFromStructTypeOverrideTransformToCIF(t *testing.T) {
+	type Doc struct {
+		Amount money `json:"amount" cif:"amount,number"`
+	}
+	schema, err := SchemaFromStruct(Doc{}, "f")
+	if err != nil {
+		t.Fatalf("SchemaFromStruct: %v", err)
+	}
+	source, err := json.Marshal(Doc{Amount: money{cents: 1234}})
+	if err != nil {
+		t.Fatalf("marshal source: %v", err)
+	}
+
+	k, ctx := newKernel(t)
+	out, err := k.TransformToCIF(ctx, source, schema, "f")
+	if err != nil {
+		t.Fatalf("TransformToCIF: %v", err)
+	}
+	if !strings.Contains(string(out), `"amount":12.34`) {
+		t.Fatalf("want cif to contain \"amount\":12.34, got: %s", out)
 	}
 }
 

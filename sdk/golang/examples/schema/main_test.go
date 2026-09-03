@@ -21,7 +21,7 @@ func TestHubspotContactSchema(t *testing.T) {
 		t.Fatalf("unmarshal schema: %v", err)
 	}
 
-	for _, name := range []string{"email", "phone", "address", "tags"} {
+	for _, name := range []string{"email", "phone", "address", "tags", "balance"} {
 		if _, ok := doc.CifSchema[name]; !ok {
 			t.Errorf("cif_schema missing field %q", name)
 		}

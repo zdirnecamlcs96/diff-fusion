@@ -92,7 +92,11 @@ compact JSON) for the struct above:
 - `any`/interface fields are rejected — declare a concrete schema type.
 - Types implementing `json.Marshaler` are rejected — reflection can't see
   their custom JSON shape; declare the field with the marshaled type instead
-  (e.g. `string`).
+  (e.g. `string`). Or assert the wire shape explicitly with a cif tag type
+  override, `cif:"<field>,string|number|boolean"` (e.g.
+  `cif:"amount,number"`) — this is the route for decimal/money types and
+  `time.Time` fields that marshal to a scalar: it skips reflection's kind
+  inspection entirely and trusts the caller's assertion.
 - Duplicate `cif` field names within the same CIF scope are rejected,
   including two different native fields landing on the same name via
   transparency.

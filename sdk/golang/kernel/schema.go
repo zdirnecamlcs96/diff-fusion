@@ -24,12 +24,13 @@ const maxSchemaDepth = 32
 
 // errUnsupportedTime is returned for time.Time fields: the kernel has no
 // timestamp type, so callers must declare the field as a string holding a
-// UTC RFC 3339 timestamp instead.
-var errUnsupportedTime = fmt.Errorf("time.Time is not supported: declare the field as string holding a UTC RFC 3339 timestamp")
+// UTC RFC 3339 timestamp instead, or assert the wire shape with a cif tag
+// type override (e.g. cif:"name,string").
+var errUnsupportedTime = fmt.Errorf("time.Time is not supported: declare the field as string holding a UTC RFC 3339 timestamp, or assert the wire shape with cif:\"name,string\"")
 
 // errUnsupportedMarshaler is returned for types implementing json.Marshaler:
 // reflection walks struct shape, not the custom MarshalJSON output.
-var errUnsupportedMarshaler = fmt.Errorf("type implements json.Marshaler: reflection cannot see its JSON shape — declare the field with the marshaled type (e.g. string)")
+var errUnsupportedMarshaler = fmt.Errorf("type implements json.Marshaler: reflection cannot see its JSON shape — declare the field with the marshaled type (e.g. string), or assert the wire shape with a cif tag type override (e.g. cif:\"name,string\")")
 
 // errUnsupportedMap is returned for map-typed fields: field names aren't
 // known ahead of time, so the kernel schema has no way to describe them.
@@ -103,7 +104,9 @@ type schemaDoc struct {
 //   - Slice/array elements must be primitive scalars or cif-tagged structs.
 //   - time.Time fields are rejected (declare as string, UTC RFC 3339).
 //   - Types implementing json.Marshaler are rejected — reflection can't see
-//     their custom JSON shape.
+//     their custom JSON shape — unless the cif tag carries a type override
+//     (`cif:"<name>,string|number|boolean"`), which asserts the wire shape
+//     and skips kind inspection entirely (also usable for time.Time).
 //   - Duplicate cif field names within the same CIF scope are rejected
 //     (including two different native fields landing on the same name via
 //     transparency).
@@ -180,29 +183,38 @@ const (
 )
 
 // parseCifTag reads the `cif` tag off a struct field. err is non-nil when an
-// option other than exactly "required" is present (e.g. a typo).
-func parseCifTag(f reflect.StructField) (state cifTagState, name string, required bool, err error) {
+// option other than "required" or a single type override
+// (string|number|boolean) is present (e.g. a typo, or two type overrides).
+// typeOverride is "" when no type override option is present.
+func parseCifTag(f reflect.StructField) (state cifTagState, name string, required bool, typeOverride string, err error) {
 	tag, present := f.Tag.Lookup("cif")
 	if !present {
-		return cifAbsent, "", false, nil
+		return cifAbsent, "", false, "", nil
 	}
 	if tag == "-" {
-		return cifDash, "", false, nil
+		return cifDash, "", false, "", nil
 	}
 	parts := strings.Split(tag, ",")
 	if parts[0] == "" {
 		// Present but no name (e.g. `cif:",required"`): treat like an
 		// explicit "-" rather than transparent flattening, since the tag
 		// was deliberately set.
-		return cifDash, "", false, nil
+		return cifDash, "", false, "", nil
 	}
 	for _, opt := range parts[1:] {
-		if opt != "required" {
-			return cifNamed, "", false, fmt.Errorf("invalid cif tag option %q (only \"required\" is allowed)", opt)
+		switch opt {
+		case "required":
+			required = true
+		case "string", "number", "boolean":
+			if typeOverride != "" {
+				return cifNamed, "", false, "", fmt.Errorf("only one type override allowed")
+			}
+			typeOverride = opt
+		default:
+			return cifNamed, "", false, "", fmt.Errorf("invalid cif tag option %q (only \"required\", \"string\", \"number\", \"boolean\" are allowed)", opt)
 		}
-		required = true
 	}
-	return cifNamed, parts[0], required, nil
+	return cifNamed, parts[0], required, typeOverride, nil
 }
 
 // scalarCifType maps a Go kind to the kernel's scalar type vocabulary
@@ -254,7 +266,7 @@ func walkStruct(t reflect.Type, depth int, prefix string) (map[string]cifFieldDe
 		if skipJSON {
 			continue
 		}
-		state, name, required, err := parseCifTag(f)
+		state, name, required, typeOverride, err := parseCifTag(f)
 		if err != nil {
 			return nil, nil, fmt.Errorf("kernel: field %s: %w", f.Name, err)
 		}
@@ -291,9 +303,19 @@ func walkStruct(t reflect.Type, depth int, prefix string) (map[string]cifFieldDe
 			continue
 		}
 
-		def, rule, err := nodeFor(f.Type, depth, prefix+escapeSegment(key))
-		if err != nil {
-			return nil, nil, fmt.Errorf("kernel: field %s: %w", f.Name, err)
+		var def cifFieldDef
+		var rule transformRule
+		if typeOverride != "" {
+			// Caller is asserting the wire shape (e.g. a json.Marshaler or
+			// time.Time field): skip kind inspection entirely.
+			sourcePath := prefix + escapeSegment(key)
+			def = cifFieldDef{Type: typeOverride}
+			rule = transformRule{SourcePath: sourcePath, Type: typeOverride}
+		} else {
+			def, rule, err = nodeFor(f.Type, depth, prefix+escapeSegment(key))
+			if err != nil {
+				return nil, nil, fmt.Errorf("kernel: field %s: %w", f.Name, err)
+			}
 		}
 		def.Required = required
 		if _, exists := cifFields[name]; exists {
