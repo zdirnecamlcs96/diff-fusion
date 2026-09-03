@@ -6,7 +6,7 @@ use crate::application::policy::declaration::MergePolicyRef;
 use crate::application::policy::{
     resolve, ConflictClass, MergeContext, PolicyDocument, UnresolvedConflict,
 };
-use crate::application::transform::transform_to_cif;
+use crate::application::transform::{transform_from_cif, transform_to_cif};
 use crate::domain::compare::compare_json;
 use crate::domain::diff::{three_way_diff as diff3, ChangeSource, Changelog, FieldChange};
 use serde_json::Value;
@@ -226,6 +226,47 @@ pub fn merge_batch_impl(changelog: &str, policy_doc: &str, ctx: &str) -> Result<
     Ok(out.to_string())
 }
 
+/// `resolve` wire boundary — runs the existing application-layer [`resolve`]
+/// over an already-computed `changelog` (the same `{"changes": [...]}` shape
+/// [`three_way_diff_impl`] emits) against a [`PolicyDocument`], applies the
+/// resolution onto `ancestor`, and returns the merged document. This is the
+/// second half of [`fuse_impl`] — `three_way_diff` → `resolve` → apply the
+/// resolution onto the ancestor — split out so a caller that already has a
+/// changelog (e.g. from [`three_way_diff_impl`]) doesn't have to re-diff.
+pub fn resolve_impl(
+    ancestor: &str,
+    changelog: &str,
+    policy_doc: &str,
+    ctx: &str,
+) -> Result<String, String> {
+    let ancestor_v = parse("ancestor", ancestor)?;
+    let wire_log: WireChangelog = serde_json::from_str(changelog)
+        .map_err(|e| format!("invalid changelog JSON: {e}"))?;
+    for (i, w) in wire_log.changes.iter().enumerate() {
+        check_change_consistency(w).map_err(|e| format!("change[{i}]: {e}"))?;
+    }
+    let doc: PolicyDocument =
+        serde_json::from_str(policy_doc).map_err(|e| format!("invalid policy_doc JSON: {e}"))?;
+    #[derive(serde::Deserialize)]
+    struct Ctx {
+        system_a: String,
+        system_b: String,
+    }
+    let c: Ctx = serde_json::from_str(ctx).map_err(|e| format!("invalid ctx JSON: {e}"))?;
+
+    let log = Changelog {
+        changes: wire_log.changes.into_iter().map(FieldChange::from).collect(),
+    };
+    let policies = doc.build();
+    let merge_ctx = MergeContext::new(c.system_a, c.system_b);
+    let resolution = resolve(&log, &policies, &merge_ctx);
+    let merged = apply_resolution(&ancestor_v, &resolution);
+    let conflicts = conflicts_to_wire(resolution.conflicts);
+
+    let out = serde_json::json!({ "value": merged, "conflicts": conflicts });
+    Ok(out.to_string())
+}
+
 /// `fuse` wire boundary — the solution-shaped kernel entry composing the
 /// three pieces most callers otherwise wire together by hand:
 /// `three_way_diff` → `resolve` → apply the resolution onto the ancestor.
@@ -241,27 +282,8 @@ pub fn fuse_impl(
     policy_doc: &str,
     ctx: &str,
 ) -> Result<String, String> {
-    let ancestor_v = parse("ancestor", ancestor)?;
-    let a_v = parse("a", a)?;
-    let b_v = parse("b", b)?;
-    let doc: PolicyDocument =
-        serde_json::from_str(policy_doc).map_err(|e| format!("invalid policy_doc JSON: {e}"))?;
-    #[derive(serde::Deserialize)]
-    struct Ctx {
-        system_a: String,
-        system_b: String,
-    }
-    let c: Ctx = serde_json::from_str(ctx).map_err(|e| format!("invalid ctx JSON: {e}"))?;
-
-    let log = diff3(&ancestor_v, &a_v, &b_v);
-    let policies = doc.build();
-    let merge_ctx = MergeContext::new(c.system_a, c.system_b);
-    let resolution = resolve(&log, &policies, &merge_ctx);
-    let merged = apply_resolution(&ancestor_v, &resolution);
-    let conflicts = conflicts_to_wire(resolution.conflicts);
-
-    let out = serde_json::json!({ "value": merged, "conflicts": conflicts });
-    Ok(out.to_string())
+    let changelog = three_way_diff_impl(ancestor, a, b)?;
+    resolve_impl(ancestor, &changelog, policy_doc, ctx)
 }
 
 /// `compare_json` wire boundary. serde serializes the domain
@@ -276,6 +298,12 @@ pub fn transform_to_cif_impl(source: &str, schema: &str, format_id: &str) -> Res
     let cif = transform_to_cif(&parse("source", source)?, &parse("schema", schema)?, format_id)
         .map_err(|e| e.to_string())?;
     serde_json::to_string(&cif).map_err(|e| e.to_string())
+}
+
+pub fn transform_from_cif_impl(cif: &str, schema: &str, format_id: &str) -> Result<String, String> {
+    let source = transform_from_cif(&parse("cif", cif)?, &parse("schema", schema)?, format_id)
+        .map_err(|e| e.to_string())?;
+    serde_json::to_string(&source).map_err(|e| e.to_string())
 }
 
 pub fn canonical_json_impl(doc: &str) -> Result<String, String> {
@@ -693,5 +721,91 @@ mod tests {
         assert!(v["conflicts"].as_array().unwrap().is_empty(), "output: {out}");
         assert_eq!(v["resolved"][0]["path"], escaped_path);
         assert_eq!(v["resolved"][0]["value"], 2);
+    }
+
+    #[test]
+    fn transform_from_cif_maps_source_path() {
+        let schema = r#"{"cif_schema":{"name":{"type":"string","required":true}},
+            "transformations":{"f":{"name":{"source_path":"n","type":"string"}}}}"#;
+        let out = transform_from_cif_impl(r#"{"name":"Widget"}"#, schema, "f").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["n"], "Widget");
+    }
+
+    #[test]
+    fn transform_round_trip_nested_children_and_array_element() {
+        let source = r#"{"lineItems":[{"extId":"A-1","sku":"SKU-X","quantity":3},{"extId":"A-2","sku":"SKU-Y","quantity":5}],"vendor":{"companyName":"Acme","contact":{"email":"a@acme.io"}}}"#;
+        let schema = r#"{"cif_schema":{
+            "items":{"type":"array","required":true,"element":{"externalId":{"type":"string"},"sku":{"type":"string"},"qty":{"type":"number"}}},
+            "supplier":{"type":"object","required":true,"children":{"name":{"type":"string"},"email":{"type":"string"}}}
+        },"transformations":{"erp":{
+            "items":{"source_path":"lineItems","type":"array","element":{"externalId":{"source_path":"extId","type":"string"},"sku":{"source_path":"sku","type":"string"},"qty":{"source_path":"quantity","type":"number"}}},
+            "supplier":{"source_path":"vendor","type":"object","children":{"name":{"source_path":"companyName","type":"string"},"email":{"source_path":"contact.email","type":"string"}}}
+        }}}"#;
+
+        let cif = transform_to_cif_impl(source, schema, "erp").unwrap();
+        let round_tripped = transform_from_cif_impl(&cif, schema, "erp").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&round_tripped).unwrap();
+        assert_eq!(
+            v,
+            serde_json::json!({
+                "lineItems": [
+                    {"extId": "A-1", "sku": "SKU-X", "quantity": 3},
+                    {"extId": "A-2", "sku": "SKU-Y", "quantity": 5}
+                ],
+                "vendor": {"companyName": "Acme", "contact": {"email": "a@acme.io"}}
+            })
+        );
+    }
+
+    #[test]
+    fn transform_from_cif_dot_at_element_level_round_trips_scalar() {
+        let schema = r#"{"cif_schema":{"meta":{"type":"object","children":{"raw":{"type":"string"}}}},
+            "transformations":{"f":{"meta":{"source_path":"tag","type":"object","children":{"raw":{"source_path":".","type":"string"}}}}}}"#;
+        let source = r#"{"tag":"urgent"}"#;
+
+        let cif = transform_to_cif_impl(source, schema, "f").unwrap();
+        let out = transform_from_cif_impl(&cif, schema, "f").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v, serde_json::json!({"tag": "urgent"}));
+    }
+
+    #[test]
+    fn transform_from_cif_dotted_real_key_writes_escaped_source_path() {
+        let schema = r#"{"cif_schema":{"name":{"type":"string"}},
+            "transformations":{"f":{"name":{"source_path":"a\\.b","type":"string"}}}}"#;
+        let out = transform_from_cif_impl(r#"{"name":"Widget"}"#, schema, "f").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v, serde_json::json!({"a.b": "Widget"}));
+    }
+
+    #[test]
+    fn transform_from_cif_missing_cif_field_is_skipped_not_error() {
+        let schema = r#"{"cif_schema":{"name":{"type":"string"},"price":{"type":"number"}},
+            "transformations":{"f":{"name":{"source_path":"n","type":"string"},"price":{"source_path":"p","type":"number"}}}}"#;
+        let out = transform_from_cif_impl(r#"{"name":"Widget"}"#, schema, "f").unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v, serde_json::json!({"n": "Widget"}));
+    }
+
+    #[test]
+    fn transform_from_cif_unknown_format_errors() {
+        let schema = r#"{"cif_schema":{},"transformations":{"f":{}}}"#;
+        let out = transform_from_cif_impl(r#"{}"#, schema, "nonexistent_format");
+        assert!(out.is_err());
+    }
+
+    #[test]
+    fn fuse_equals_three_way_diff_then_resolve() {
+        let ancestor = r#"{"pricing":{"amount":10,"currency":"usd"}}"#;
+        let a = r#"{"pricing":{"amount":12,"currency":"usd"}}"#;
+        let b = r#"{"pricing":{"amount":10,"currency":"usd"}}"#;
+        let policy_doc = r#"{"fields":{"pricing.amount":{"kind":"owned_by","system":"x"}}}"#;
+        let ctx = r#"{"system_a":"x","system_b":"y"}"#;
+
+        let fused = fuse_impl(ancestor, a, b, policy_doc, ctx).unwrap();
+        let changelog = three_way_diff_impl(ancestor, a, b).unwrap();
+        let resolved = resolve_impl(ancestor, &changelog, policy_doc, ctx).unwrap();
+        assert_eq!(fused, resolved);
     }
 }

@@ -8,8 +8,8 @@
 //! wire boundary.
 
 use diff_fusion::drivers::wire::{
-    compare_json_impl, fuse_impl, merge_batch_impl, merge_field_impl, three_way_diff_impl,
-    transform_to_cif_impl,
+    compare_json_impl, fuse_impl, merge_batch_impl, merge_field_impl, resolve_impl,
+    three_way_diff_impl, transform_from_cif_impl, transform_to_cif_impl,
 };
 use serde_json::Value;
 
@@ -178,6 +178,63 @@ fn transform_to_cif_vectors_match() {
         let is_err = case["isErr"].as_bool().unwrap();
 
         let result = transform_to_cif_impl(source, schema, format_id);
+        match result {
+            Ok(s) => {
+                assert!(!is_err, "vector '{name}': expected an error but got Ok({s})");
+                assert_eq!(s, expected, "vector '{name}': Ok output mismatch");
+            }
+            Err(e) => {
+                assert!(is_err, "vector '{name}': expected Ok but got Err({e})");
+                assert_eq!(e, expected, "vector '{name}': error message mismatch");
+            }
+        }
+    }
+}
+
+#[test]
+fn transform_from_cif_vectors_match() {
+    let v = vectors();
+    let cases = v["transformFromCif"].as_array().expect("transformFromCif must be an array");
+    assert_eq!(cases.len(), 10, "transformFromCif vector count changed — update this and the TS/Go counts");
+
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let cif = case["cif"].as_str().unwrap();
+        let schema = case["schema"].as_str().unwrap();
+        let format_id = case["formatId"].as_str().unwrap();
+        let expected = case["expected"].as_str().unwrap();
+        let is_err = case["isErr"].as_bool().unwrap();
+
+        let result = transform_from_cif_impl(cif, schema, format_id);
+        match result {
+            Ok(s) => {
+                assert!(!is_err, "vector '{name}': expected an error but got Ok({s})");
+                assert_eq!(s, expected, "vector '{name}': Ok output mismatch");
+            }
+            Err(e) => {
+                assert!(is_err, "vector '{name}': expected Ok but got Err({e})");
+                assert_eq!(e, expected, "vector '{name}': error message mismatch");
+            }
+        }
+    }
+}
+
+#[test]
+fn resolve_vectors_match() {
+    let v = vectors();
+    let cases = v["resolve"].as_array().expect("resolve must be an array");
+    assert_eq!(cases.len(), 7, "resolve vector count changed — update this and the TS/Go counts");
+
+    for case in cases {
+        let name = case["name"].as_str().unwrap();
+        let ancestor = case["ancestor"].as_str().unwrap();
+        let changelog = case["changelog"].as_str().unwrap();
+        let policy_doc = case["policyDoc"].as_str().unwrap();
+        let ctx = case["ctx"].as_str().unwrap();
+        let expected = case["expected"].as_str().unwrap();
+        let is_err = case["isErr"].as_bool().unwrap();
+
+        let result = resolve_impl(ancestor, changelog, policy_doc, ctx);
         match result {
             Ok(s) => {
                 assert!(!is_err, "vector '{name}': expected an error but got Ok({s})");

@@ -405,6 +405,71 @@
       "policyRef": "{\"kind\":\"additive\"}"
     }
   ],
+  "resolve": [
+    {
+      "ancestor": "{\"pricing\":{\"amount\":10,\"currency\":\"usd\"}}",
+      "changelog": "{\"changes\":[{\"path\":\"pricing.amount\",\"old_value\":10,\"new_from_a\":12,\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"pricing\":{\"amount\":12,\"currency\":\"usd\"}}}",
+      "isErr": false,
+      "name": "all-resolved-nested-dotted-path",
+      "policyDoc": "{\"fields\":{\"pricing.amount\":{\"kind\":\"owned_by\",\"system\":\"x\"}}}"
+    },
+    {
+      "ancestor": "{\"price\":10,\"mystery\":1}",
+      "changelog": "{\"changes\":[{\"path\":\"mystery\",\"old_value\":1,\"new_from_a\":2,\"source\":\"a\"},{\"path\":\"price\",\"old_value\":10,\"new_from_a\":15,\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[{\"change\":{\"new_from_a\":2,\"old_value\":1,\"path\":\"mystery\",\"source\":\"a\"},\"class\":\"no_policy\",\"path\":\"mystery\",\"reason\":\"no policy declared for path 'mystery'\"}],\"value\":{\"mystery\":1,\"price\":15}}",
+      "isErr": false,
+      "name": "mixed-resolved-and-conflict",
+      "policyDoc": "{\"fields\":{\"price\":{\"kind\":\"owned_by\",\"system\":\"x\"}}}"
+    },
+    {
+      "ancestor": "{\"mystery\":1}",
+      "changelog": "{\"changes\":[{\"path\":\"mystery\",\"old_value\":1,\"new_from_a\":2,\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[{\"change\":{\"new_from_a\":2,\"old_value\":1,\"path\":\"mystery\",\"source\":\"a\"},\"class\":\"no_policy\",\"path\":\"mystery\",\"reason\":\"no policy declared for path 'mystery'\"}],\"value\":{\"mystery\":1}}",
+      "isErr": false,
+      "name": "no-policy-conflict",
+      "policyDoc": "{\"fields\":{}}"
+    },
+    {
+      "ancestor": "{\"items\":[{\"sku\":\"x\",\"q\":1}]}",
+      "changelog": "{\"changes\":[{\"path\":\"items\",\"old_value\":[{\"q\":1,\"sku\":\"x\"}],\"new_from_a\":[{\"q\":1,\"sku\":\"x\"},{\"q\":2,\"sku\":\"y\"}],\"new_from_b\":[{\"q\":1,\"sku\":\"x\"},{\"q\":3,\"sku\":\"z\"}],\"source\":\"both\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"items\":[{\"q\":1,\"sku\":\"x\"},{\"q\":2,\"sku\":\"y\"},{\"q\":3,\"sku\":\"z\"}]}}",
+      "isErr": false,
+      "name": "set-by-key-merged-array-in-value",
+      "policyDoc": "{\"fields\":{\"items\":{\"kind\":\"set_by_key\",\"identity\":[\"sku\"],\"a_anchor\":\"sku\",\"b_anchor\":\"sku\"}}}"
+    },
+    {
+      "ancestor": "{\"status\":\"draft\"}",
+      "changelog": "{\"changes\":[{\"path\":\"status\",\"old_value\":\"draft\",\"new_from_a\":null,\"source\":\"a\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"status\":null}}",
+      "isErr": false,
+      "name": "cleared-field-is-literal-null",
+      "policyDoc": "{\"fields\":{\"status\":{\"kind\":\"owned_by\",\"system\":\"x\"}}}"
+    },
+    {
+      "ancestor": "{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"old\",\"q\":1}}}",
+      "changelog": "{\"changes\":[{\"path\":\"items.key_2025-01-01T00:00:00\\\\.000Z_demo.name\",\"old_value\":\"old\",\"new_from_a\":\"new\",\"source\":\"a\"},{\"path\":\"items.key_2025-01-01T00:00:00\\\\.000Z_demo.q\",\"old_value\":1,\"new_from_b\":2,\"source\":\"b\"}]}",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "{\"conflicts\":[],\"value\":{\"items\":{\"key_2025-01-01T00:00:00.000Z_demo\":{\"name\":\"new\",\"q\":2}}}}",
+      "isErr": false,
+      "name": "dotted-key-conflict-free-merge-lands-in-real-key",
+      "policyDoc": "{\"fields\":{\"items.key_2025-01-01T00:00:00\\\\.000Z_demo.name\":{\"kind\":\"owned_by\",\"system\":\"x\"},\"items.key_2025-01-01T00:00:00\\\\.000Z_demo.q\":{\"kind\":\"owned_by\",\"system\":\"y\"}}}"
+    },
+    {
+      "ancestor": "{bad",
+      "changelog": "invalid ancestor JSON: key must be a string at line 1 column 2",
+      "ctx": "{\"system_a\":\"x\",\"system_b\":\"y\"}",
+      "expected": "invalid ancestor JSON: key must be a string at line 1 column 2",
+      "isErr": true,
+      "name": "malformed-ancestor-json",
+      "policyDoc": "{\"fields\":{}}"
+    }
+  ],
   "threeWayDiff": [
     {
       "a": "{\"price\":10,\"qty\":5}",
@@ -541,6 +606,88 @@
       "expected": "invalid b JSON: key must be a string at line 1 column 2",
       "isErr": true,
       "name": "malformed-b-json"
+    }
+  ],
+  "transformFromCif": [
+    {
+      "cif": "{\"product_name\":\"Widget\",\"product_price\":19.99}",
+      "expected": "{\"name\":\"Widget\",\"price\":19.99}",
+      "formatId": "format_a",
+      "isErr": false,
+      "name": "scalar-mapping",
+      "schema": "{\"cif_schema\":{\"product_name\":{\"type\":\"string\",\"required\":true},\"product_price\":{\"type\":\"number\",\"required\":true}},\"transformations\":{\"format_a\":{\"product_name\":{\"source_path\":\"name\",\"type\":\"string\"},\"product_price\":{\"source_path\":\"price\",\"type\":\"number\"}}}}"
+    },
+    {
+      "cif": "{\"product_name\":\"Gadget\",\"product_price\":99.99}",
+      "expected": "{\"pricing\":{\"amount\":99.99},\"product\":{\"details\":{\"name\":\"Gadget\"}}}",
+      "formatId": "nested_format",
+      "isErr": false,
+      "name": "nested-dotted-source-path",
+      "schema": "{\"cif_schema\":{\"product_name\":{\"type\":\"string\",\"required\":true},\"product_price\":{\"type\":\"number\",\"required\":true}},\"transformations\":{\"nested_format\":{\"product_name\":{\"source_path\":\"product.details.name\",\"type\":\"string\"},\"product_price\":{\"source_path\":\"pricing.amount\",\"type\":\"number\"}}}}"
+    },
+    {
+      "cif": "{\"is_active\":true,\"product_id\":\"12345\",\"stock\":100.0}",
+      "expected": "{\"active\":true,\"id\":\"12345\",\"quantity\":100.0}",
+      "formatId": "format_b",
+      "isErr": false,
+      "name": "type-conversion",
+      "schema": "{\"cif_schema\":{\"product_id\":{\"type\":\"string\",\"required\":true},\"is_active\":{\"type\":\"boolean\",\"required\":true},\"stock\":{\"type\":\"number\",\"required\":true}},\"transformations\":{\"format_b\":{\"product_id\":{\"source_path\":\"id\",\"type\":\"string\"},\"is_active\":{\"source_path\":\"active\",\"type\":\"boolean\"},\"stock\":{\"source_path\":\"quantity\",\"type\":\"number\"}}}}"
+    },
+    {
+      "cif": "{\"items\":[{\"externalId\":\"A-1\",\"qty\":3,\"sku\":\"SKU-X\"},{\"externalId\":\"A-2\",\"qty\":5,\"sku\":\"SKU-Y\"}]}",
+      "expected": "{\"lineItems\":[{\"extId\":\"A-1\",\"quantity\":3,\"sku\":\"SKU-X\"},{\"extId\":\"A-2\",\"quantity\":5,\"sku\":\"SKU-Y\"}]}",
+      "formatId": "erp",
+      "isErr": false,
+      "name": "array-elements-with-anchors",
+      "schema": "{\"cif_schema\":{\"items\":{\"type\":\"array\",\"required\":true,\"element\":{\"externalId\":{\"type\":\"string\",\"anchor\":\"a\"},\"internalId\":{\"type\":\"string\",\"anchor\":\"b\"},\"sku\":{\"type\":\"string\",\"required\":true},\"qty\":{\"type\":\"number\"}}}},\"transformations\":{\"erp\":{\"items\":{\"source_path\":\"lineItems\",\"type\":\"array\",\"element\":{\"externalId\":{\"source_path\":\"extId\",\"type\":\"string\"},\"sku\":{\"source_path\":\"sku\",\"type\":\"string\"},\"qty\":{\"source_path\":\"quantity\",\"type\":\"number\"}}}}}}"
+    },
+    {
+      "cif": "{\"supplier\":{\"email\":\"a@acme.io\",\"name\":\"Acme\"}}",
+      "expected": "{\"vendor\":{\"companyName\":\"Acme\",\"contact\":{\"email\":\"a@acme.io\"}}}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "object-children-nested-cif-object",
+      "schema": "{\"cif_schema\":{\"supplier\":{\"type\":\"object\",\"required\":true,\"children\":{\"name\":{\"type\":\"string\",\"required\":true},\"email\":{\"type\":\"string\"}}}},\"transformations\":{\"f\":{\"supplier\":{\"source_path\":\"vendor\",\"type\":\"object\",\"children\":{\"name\":{\"source_path\":\"companyName\",\"type\":\"string\"},\"email\":{\"source_path\":\"contact.email\",\"type\":\"string\"}}}}}}"
+    },
+    {
+      "cif": "{\"net_suite\":{\"id\":\"42\"}}",
+      "expected": "{\"id\":\"42\"}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "top-level-source-path-dot",
+      "schema": "{\"cif_schema\":{\"net_suite\":{\"type\":\"object\",\"children\":{\"id\":{\"type\":\"string\"}}}},\"transformations\":{\"f\":{\"net_suite\":{\"source_path\":\".\",\"type\":\"object\",\"children\":{\"id\":{\"source_path\":\"id\",\"type\":\"string\"}}}}}}"
+    },
+    {
+      "cif": "{\"meta\":{\"raw\":\"urgent\"}}",
+      "expected": "{\"tag\":\"urgent\"}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "object-child-source-path-dot",
+      "schema": "{\"cif_schema\":{\"meta\":{\"type\":\"object\",\"children\":{\"raw\":{\"type\":\"string\"}}}},\"transformations\":{\"f\":{\"meta\":{\"source_path\":\"tag\",\"type\":\"object\",\"children\":{\"raw\":{\"source_path\":\".\",\"type\":\"string\"}}}}}}"
+    },
+    {
+      "cif": "{\"items\":[{\"dimensions\":{\"height\":3,\"width\":2},\"sku\":\"X\"}],\"supplier\":{\"addresses\":[{\"city\":\"Oslo\"},{\"city\":\"Bergen\"}],\"name\":\"Acme\"}}",
+      "expected": "{\"lines\":[{\"dims\":{\"h\":3,\"w\":2},\"sku\":\"X\"}],\"vendor\":{\"addrs\":[{\"city\":\"Oslo\"},{\"city\":\"Bergen\"}],\"name\":\"Acme\"}}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "array-of-objects-with-nested-children-composing",
+      "schema": "{\"cif_schema\":{\"items\":{\"type\":\"array\",\"element\":{\"sku\":{\"type\":\"string\"},\"dimensions\":{\"type\":\"object\",\"children\":{\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"}}}}},\"supplier\":{\"type\":\"object\",\"children\":{\"name\":{\"type\":\"string\"},\"addresses\":{\"type\":\"array\",\"element\":{\"city\":{\"type\":\"string\"}}}}}},\"transformations\":{\"f\":{\"items\":{\"source_path\":\"lines\",\"type\":\"array\",\"element\":{\"sku\":{\"source_path\":\"sku\",\"type\":\"string\"},\"dimensions\":{\"source_path\":\"dims\",\"type\":\"object\",\"children\":{\"width\":{\"source_path\":\"w\",\"type\":\"number\"},\"height\":{\"source_path\":\"h\",\"type\":\"number\"}}}}},\"supplier\":{\"source_path\":\"vendor\",\"type\":\"object\",\"children\":{\"name\":{\"source_path\":\"name\",\"type\":\"string\"},\"addresses\":{\"source_path\":\"addrs\",\"type\":\"array\",\"element\":{\"city\":{\"source_path\":\"city\",\"type\":\"string\"}}}}}}}}"
+    },
+    {
+      "cif": "{\"orders\":[{\"id\":\"o1\",\"lines\":[{\"sku\":\"a\"},{\"sku\":\"b\"}]},{\"id\":\"o2\",\"lines\":[{\"sku\":\"c\"}]}]}",
+      "expected": "{\"orders\":[{\"id\":\"o1\",\"lines\":[{\"sku\":\"a\"},{\"sku\":\"b\"}]},{\"id\":\"o2\",\"lines\":[{\"sku\":\"c\"}]}]}",
+      "formatId": "f",
+      "isErr": false,
+      "name": "nested-arrays-of-objects",
+      "schema": "{\"cif_schema\":{\"orders\":{\"type\":\"array\",\"element\":{\"id\":{\"type\":\"string\"},\"lines\":{\"type\":\"array\",\"element\":{\"sku\":{\"type\":\"string\"}}}}}},\"transformations\":{\"f\":{\"orders\":{\"source_path\":\"orders\",\"type\":\"array\",\"element\":{\"id\":{\"source_path\":\"id\",\"type\":\"string\"},\"lines\":{\"source_path\":\"lines\",\"type\":\"array\",\"element\":{\"sku\":{\"source_path\":\"sku\",\"type\":\"string\"}}}}}}}}"
+    },
+    {
+      "cif": "{\"name\":\"Widget\"}",
+      "expected": "Format 'nonexistent_format' not found in schema",
+      "formatId": "nonexistent_format",
+      "isErr": true,
+      "name": "unknown-format",
+      "schema": "{\"cif_schema\":{},\"transformations\":{\"format_a\":{}}}"
     }
   ],
   "transformToCif": [

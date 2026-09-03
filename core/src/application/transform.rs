@@ -1,4 +1,4 @@
-use crate::domain::json_path::split_path;
+use crate::domain::json_path::{set_at_path, split_path};
 use serde_json::Value;
 use std::error::Error;
 
@@ -32,6 +32,93 @@ impl Transformer {
         }
 
         Ok(Value::Object(cif_object))
+    }
+
+    /// Transform a CIF document back to a source-shaped JSON document, using
+    /// the schema's `transformations` rules for `format_id` — the reverse of
+    /// [`Self::to_cif`]. Walks the format's rule map directly (not
+    /// `cif_schema`; `cif_schema`'s `required` is a forward-only concern and
+    /// is ignored here). A CIF field absent from `cif` is left untouched in
+    /// the output rather than erroring — unmapped is local state. There is
+    /// no type coercion on the way out: `normalize_type` is one-directional.
+    pub fn from_cif(cif: &Value, schema: &Value, format_id: &str) -> Result<Value, Box<dyn Error>> {
+        let transformations = Self::get_transformations(schema, format_id)?;
+        Self::from_cif_rules(cif, transformations)
+    }
+
+    /// Build one reversed "scope" object from `rules` (a map of
+    /// `cif_field_name -> {source_path, type, children?, element?}`) applied
+    /// against `cif`. Shared by the top-level [`Self::from_cif`] call and by
+    /// the recursive `children`/`element` cases below, which use the
+    /// identical rule shape scoped to a nested CIF value.
+    fn from_cif_rules(cif: &Value, rules: &Value) -> Result<Value, Box<dyn Error>> {
+        let mut scope = Value::Object(serde_json::Map::new());
+        let Value::Object(rules_obj) = rules else {
+            return Ok(scope);
+        };
+        for (cif_field_name, rule) in rules_obj {
+            let Some(v) = cif.get(cif_field_name) else {
+                continue;
+            };
+
+            let source_path = rule
+                .get("source_path")
+                .and_then(Value::as_str)
+                .ok_or_else(|| format!("source_path not defined for field '{cif_field_name}'"))?;
+
+            let v_prime = if let (Some(children_rules), true) = (rule.get("children"), v.is_object())
+            {
+                Self::from_cif_rules(v, children_rules)?
+            } else if let (Some(element_rules), Some(arr)) = (rule.get("element"), v.as_array()) {
+                let mut out = Vec::with_capacity(arr.len());
+                for elem in arr {
+                    out.push(Self::from_cif_rules(elem, element_rules)?);
+                }
+                Value::Array(out)
+            } else {
+                v.clone()
+            };
+
+            Self::write_at_scope(&mut scope, source_path, v_prime, cif_field_name)?;
+        }
+        Ok(scope)
+    }
+
+    /// Write `v_prime` into `scope` at `source_path`, mirroring the forward
+    /// pass's relative-scope semantics: `children`/`element` paths are
+    /// relative to the parent's resolved scope, not the document root.
+    /// `source_path == "."` merges an object `v_prime` into an object
+    /// `scope`, or — when either isn't an object — replaces `scope`
+    /// outright (the "element is a scalar" case). Any other path uses
+    /// [`set_at_path`]; if `scope` isn't an object by then, that's an error
+    /// naming the offending field rather than a silent overwrite.
+    fn write_at_scope(
+        scope: &mut Value,
+        source_path: &str,
+        v_prime: Value,
+        cif_field_name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        if source_path == "." {
+            if scope.is_object() && v_prime.is_object() {
+                let scope_map = scope.as_object_mut().expect("checked is_object above");
+                let Value::Object(v_map) = v_prime else {
+                    unreachable!("checked is_object above")
+                };
+                scope_map.extend(v_map);
+            } else {
+                *scope = v_prime;
+            }
+            return Ok(());
+        }
+
+        if !scope.is_object() {
+            return Err(format!(
+                "cannot write field '{cif_field_name}' at path '{source_path}': output scope is not an object"
+            )
+            .into());
+        }
+        set_at_path(scope, source_path, v_prime);
+        Ok(())
     }
 
     fn get_transformations<'a>(
@@ -314,4 +401,35 @@ pub fn transform_to_cif(
     format_id: &str,
 ) -> Result<Value, Box<dyn Error>> {
     Transformer::to_cif(source, schema, format_id)
+}
+
+/// Transform a CIF document back to a source-shaped JSON document using the
+/// schema's `transformations` rules for `format_id` — the reverse of
+/// [`transform_to_cif`].
+///
+/// # Examples
+/// ```
+/// use diff_fusion::transform_from_cif;
+/// use serde_json::json;
+///
+/// let cif = json!({"product_name": "Widget"});
+/// let schema = json!({
+///     "cif_schema": {
+///         "product_name": {"type": "string", "required": true}
+///     },
+///     "transformations": {
+///         "format_a": {
+///             "product_name": {"source_path": "name", "type": "string"}
+///         }
+///     }
+/// });
+///
+/// let result = transform_from_cif(&cif, &schema, "format_a");
+/// ```
+pub fn transform_from_cif(
+    cif: &Value,
+    schema: &Value,
+    format_id: &str,
+) -> Result<Value, Box<dyn Error>> {
+    Transformer::from_cif(cif, schema, format_id)
 }

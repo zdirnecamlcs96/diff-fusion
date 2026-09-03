@@ -88,7 +88,7 @@ pub use domain::compare::compare_json;
 pub use domain::error::SyncError;
 
 // Application types commonly constructed by users (for building policies).
-pub use application::transform::transform_to_cif;
+pub use application::transform::{transform_from_cif, transform_to_cif};
 
 use serde::{Deserialize, Serialize};
 

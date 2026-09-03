@@ -28,8 +28,8 @@
 // runtime's own serializer.
 
 use diff_fusion::drivers::wire::{
-    compare_json_impl, fuse_impl, merge_batch_impl, merge_field_impl, three_way_diff_impl,
-    transform_to_cif_impl,
+    compare_json_impl, fuse_impl, merge_batch_impl, merge_field_impl, resolve_impl,
+    three_way_diff_impl, transform_from_cif_impl, transform_to_cif_impl,
 };
 use serde_json::{json, Value};
 
@@ -41,6 +41,21 @@ fn transform_entry(name: &str, source: &str, schema: &str, format_id: &str) -> V
     json!({
         "name": name,
         "source": source,
+        "schema": schema,
+        "formatId": format_id,
+        "expected": expected,
+        "isErr": is_err,
+    })
+}
+
+fn transform_from_cif_entry(name: &str, cif: &str, schema: &str, format_id: &str) -> Value {
+    let (expected, is_err) = match transform_from_cif_impl(cif, schema, format_id) {
+        Ok(s) => (s, false),
+        Err(e) => (e, true),
+    };
+    json!({
+        "name": name,
+        "cif": cif,
         "schema": schema,
         "formatId": format_id,
         "expected": expected,
@@ -125,6 +140,22 @@ fn fuse_entry(
         "ancestor": ancestor,
         "a": a,
         "b": b,
+        "policyDoc": policy_doc,
+        "ctx": ctx,
+        "expected": expected,
+        "isErr": is_err,
+    })
+}
+
+fn resolve_entry(name: &str, ancestor: &str, changelog: &str, policy_doc: &str, ctx: &str) -> Value {
+    let (expected, is_err) = match resolve_impl(ancestor, changelog, policy_doc, ctx) {
+        Ok(s) => (s, false),
+        Err(e) => (e, true),
+    };
+    json!({
+        "name": name,
+        "ancestor": ancestor,
+        "changelog": changelog,
         "policyDoc": policy_doc,
         "ctx": ctx,
         "expected": expected,
@@ -685,6 +716,49 @@ fn main() {
         ),
     ];
 
+    // Derived from every non-error `transformToCif` vector above: cif = that
+    // vector's expected CIF output, same schema/formatId, expected =
+    // transform_from_cif_impl's result — proves the reverse pass round-trips
+    // through the same schema. Plus one hand-written error case.
+    let transform_from_cif: Vec<Value> = transform_to_cif
+        .iter()
+        .filter(|v| !v["isErr"].as_bool().unwrap())
+        .map(|v| {
+            let name = v["name"].as_str().unwrap();
+            let cif = v["expected"].as_str().unwrap();
+            let schema = v["schema"].as_str().unwrap();
+            let format_id = v["formatId"].as_str().unwrap();
+            transform_from_cif_entry(name, cif, schema, format_id)
+        })
+        .chain(std::iter::once(transform_from_cif_entry(
+            "unknown-format",
+            r#"{"name":"Widget"}"#,
+            r#"{"cif_schema":{},"transformations":{"format_a":{}}}"#,
+            "nonexistent_format",
+        )))
+        .collect();
+
+    // Derived from every `fuse` vector above: changelog =
+    // three_way_diff_impl(ancestor, a, b), expected = resolve_impl's result
+    // — proves fuse_impl's composition (three_way_diff -> resolve) matches
+    // calling the two ops directly.
+    let resolve: Vec<Value> = fuse
+        .iter()
+        .map(|v| {
+            let name = v["name"].as_str().unwrap();
+            let ancestor = v["ancestor"].as_str().unwrap();
+            let a = v["a"].as_str().unwrap();
+            let b = v["b"].as_str().unwrap();
+            let policy_doc = v["policyDoc"].as_str().unwrap();
+            let ctx = v["ctx"].as_str().unwrap();
+            let changelog = match three_way_diff_impl(ancestor, a, b) {
+                Ok(s) => s,
+                Err(e) => e,
+            };
+            resolve_entry(name, ancestor, &changelog, policy_doc, ctx)
+        })
+        .collect();
+
     let out = json!({
         "threeWayDiff": Value::Array(three_way_diff),
         "mergeField": Value::Array(merge_field),
@@ -692,6 +766,8 @@ fn main() {
         "compareJson": Value::Array(compare_json),
         "transformToCif": Value::Array(transform_to_cif),
         "fuse": Value::Array(fuse),
+        "transformFromCif": Value::Array(transform_from_cif),
+        "resolve": Value::Array(resolve),
     });
     println!("{}", serde_json::to_string_pretty(&out).unwrap());
 }

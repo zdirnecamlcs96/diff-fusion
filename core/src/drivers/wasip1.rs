@@ -13,7 +13,8 @@
 
 use super::wire::{
     canonical_json_impl, compare_json_impl, fuse_impl, idempotency_key_hex_impl, merge_batch_impl,
-    merge_field_impl, three_way_diff_impl, transform_to_cif_impl,
+    merge_field_impl, resolve_impl, three_way_diff_impl, transform_from_cif_impl,
+    transform_to_cif_impl,
 };
 
 #[unsafe(no_mangle)]
@@ -127,6 +128,27 @@ pub extern "C" fn df_fuse(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn df_resolve(
+    ancestor_ptr: u32,
+    ancestor_len: u32,
+    changelog_ptr: u32,
+    changelog_len: u32,
+    policy_doc_ptr: u32,
+    policy_doc_len: u32,
+    ctx_ptr: u32,
+    ctx_len: u32,
+) -> u64 {
+    envelope((|| {
+        resolve_impl(
+            arg(ancestor_ptr, ancestor_len)?,
+            arg(changelog_ptr, changelog_len)?,
+            arg(policy_doc_ptr, policy_doc_len)?,
+            arg(ctx_ptr, ctx_len)?,
+        )
+    })())
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn df_canonical_json(doc_ptr: u32, doc_len: u32) -> u64 {
     envelope((|| canonical_json_impl(arg(doc_ptr, doc_len)?))())
 }
@@ -148,6 +170,24 @@ pub extern "C" fn df_transform_to_cif(
     envelope((|| {
         transform_to_cif_impl(
             arg(source_ptr, source_len)?,
+            arg(schema_ptr, schema_len)?,
+            arg(format_id_ptr, format_id_len)?,
+        )
+    })())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn df_transform_from_cif(
+    cif_ptr: u32,
+    cif_len: u32,
+    schema_ptr: u32,
+    schema_len: u32,
+    format_id_ptr: u32,
+    format_id_len: u32,
+) -> u64 {
+    envelope((|| {
+        transform_from_cif_impl(
+            arg(cif_ptr, cif_len)?,
             arg(schema_ptr, schema_len)?,
             arg(format_id_ptr, format_id_len)?,
         )
